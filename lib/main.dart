@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:app_movil_cam_maps/vistas/welcome.dart'; // Verifica que el nombre del paquete sea este
+import 'package:app_movil_cam_maps/vistas/welcome.dart';
 
 void main() {
   runApp(const MyApp());
@@ -17,7 +17,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         primarySwatch: Colors.blue,
       ),
-      home: const WelcomePage(), // Nombre de la clase en welcome.dart
+      home: const WelcomePage(),
     );
   }
 }

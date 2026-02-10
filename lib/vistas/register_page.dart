@@ -8,144 +8,155 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
-  final _formKey = GlobalKey<FormState>();
+  // Color danger de tu CSS y Bootstrap: #dc3545
+  static const Color usfqRed = Color(0xFFDC3545);
   
-  // Controladores para capturar los datos de registro
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _userController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
-
-  bool _isPasswordVisible = false;
-  bool _isLoading = false;
-
-  void _handleRegister() {
-    if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
-
-      // Simulación de registro (esto se conectará a la API de Django el viernes)
-      Future.delayed(const Duration(seconds: 2), () {
-        setState(() {
-          _isLoading = false;
-        });
-        
-        print("Registrando a: ${_userController.text}");
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cuenta creada exitosamente en CVPack')),
-        );
-        
-        // Volver al login después de registrarse
-        Navigator.pop(context);
-      });
-    }
-  }
+  String? _selectedRol;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA), // bg-light en CSS
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: usfqRed,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF003366)),
+        title: const Text(
+          "EYE OF THE DRAGON",
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+        ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 30),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Crear Cuenta",
-                style: TextStyle(
-                  fontSize: 32, 
-                  fontWeight: FontWeight.bold, 
-                  color: Color(0xFF003366)
+        child: Column(
+          children: [
+            const SizedBox(height: 30),
+            // Logo del proyecto (identidad visual)
+            Image.asset(
+              'images/logo.webp',
+              height: 80,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(height: 20),
+            
+            // Contenedor del Formulario (Simulando la card del HTML)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(15),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    )
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Crear Cuenta",
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: usfqRed,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    
+                    // Campo Nombre (name="nombre")
+                    const Text("Nombre completo", style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    TextField(
+                      decoration: InputDecoration(
+                        hintText: "Nombre",
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 15),
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    
+                    // Campo Correo (name="correo")
+                    const Text("Correo electrónico", style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    TextField(
+                      decoration: InputDecoration(
+                        hintText: "ejemplo@correo.com",
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 15),
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    
+                    // Campo Password (name="password")
+                    const Text("Contraseña", style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    TextField(
+                      obscureText: true,
+                      decoration: InputDecoration(
+                        hintText: "********",
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 15),
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+
+                    // Selector de Rol (select name="rol" en HTML)
+                    const Text("Rol", style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 15),
+                      ),
+                      value: _selectedRol,
+                      hint: const Text("Selecciona un rol"),
+                      items: const [
+                        DropdownMenuItem(value: "administrador", child: Text("Administrador")),
+                        DropdownMenuItem(value: "seguridad", child: Text("Cuerpo de Seguridad")),
+                      ],
+                      onChanged: (val) => setState(() => _selectedRol = val),
+                    ),
+                    const SizedBox(height: 30),
+                    
+                    // Botón Registrarse (rounded-pill btn-danger)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          // Aquí irá la lógica de registro
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: usfqRed,
+                          shape: const StadiumBorder(),
+                        ),
+                        child: const Text(
+                          "REGISTRARSE",
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 10),
-              const Text("Únete a CVPack para empezar el análisis de videos."),
-              const SizedBox(height: 30),
-              
-              // Nombre Completo
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: "Nombre Completo",
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.face),
-                ),
-                validator: (value) => value!.isEmpty ? "Campo requerido" : null,
+            ),
+            const SizedBox(height: 30),
+            
+            // Footer idéntico al HTML
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              width: double.infinity,
+              color: usfqRed,
+              child: const Text(
+                "© 2025 Eye of the Dragon. USFQ",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontSize: 12),
               ),
-              const SizedBox(height: 20),
-              
-              // Usuario
-              TextFormField(
-                controller: _userController,
-                decoration: const InputDecoration(
-                  labelText: "Usuario",
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-                validator: (value) => value!.isEmpty ? "Campo requerido" : null,
-              ),
-              const SizedBox(height: 20),
-              
-              // Contraseña
-              TextFormField(
-                controller: _passwordController,
-                obscureText: !_isPasswordVisible,
-                decoration: InputDecoration(
-                  labelText: "Contraseña",
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  suffixIcon: IconButton(
-                    icon: Icon(_isPasswordVisible ? Icons.visibility : Icons.visibility_off),
-                    onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
-                  ),
-                ),
-                validator: (value) => value!.length < 6 ? "Mínimo 6 caracteres" : null,
-              ),
-              const SizedBox(height: 20),
-              
-              // Confirmar Contraseña
-              TextFormField(
-                controller: _confirmPasswordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: "Confirmar Contraseña",
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock_reset),
-                ),
-                validator: (value) {
-                  if (value != _passwordController.text) {
-                    return "Las contraseñas no coinciden";
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 40),
-              
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _handleRegister,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF003366),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: _isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white) 
-                    : const Text("REGISTRARSE", style: TextStyle(color: Colors.white)),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

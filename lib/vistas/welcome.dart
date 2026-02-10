@@ -7,64 +7,79 @@ class WelcomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const Color usfqRed = Color(0xFFDC3545);
+
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 30),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Logo o Icono Principal
-              const Expanded(
-                flex: 3,
+      body: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.only(top: 50, bottom: 15, left: 20, right: 20),
+            width: double.infinity,
+            color: usfqRed,
+            child: const Text(
+              "UNIVERSIDAD SAN FRANCISCO DE QUITO",
+              textAlign: TextAlign.left,
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+          
+          Expanded(
+            child: Container(
+              color: const Color(0xFFF8F9FA), 
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 40),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.analytics_rounded,
-                      size: 120,
-                      color: Color(0xFF003366),
+                    // AQUÍ VA TU LOGO WEBP
+                    Image.asset(
+                      'images/logo.webp', // Ruta que configuraste en pubspec.yaml
+                      height: 120, // Ajusta según el tamaño de tu archivo
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        // Esto se muestra si la ruta está mal o el archivo no existe
+                        return const Icon(Icons.broken_image, size: 80, color: Colors.grey);
+                      },
                     ),
-                    SizedBox(height: 20),
-                    Text(
-                      "CVPACK",
+                    const SizedBox(height: 20),
+                    
+                    const Text(
+                      "EYE OF THE DRAGON",
+                      textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 40,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
-                        color: Color(0xFF003366),
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
+                        color: usfqRed,
+                        letterSpacing: -1,
                       ),
                     ),
-                    Text(
-                      "Análisis de Video y Monitoreo",
-                      style: TextStyle(color: Colors.grey, fontSize: 16),
+                    const SizedBox(height: 10),
+                    const Text(
+                      "Sistema de Monitoreo Inteligente",
+                      style: TextStyle(color: Colors.black54, fontSize: 16),
                     ),
-                  ],
-                ),
-              ),
-              
-              // Botones de Acción
-              Expanded(
-                flex: 2,
-                child: Column(
-                  children: [
-                    // Botón de Iniciar Sesión
+                    const SizedBox(height: 50),
+                    
                     SizedBox(
                       width: double.infinity,
-                      height: 55,
+                      height: 50,
                       child: ElevatedButton(
                         onPressed: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => LoginScreen()),
+                            MaterialPageRoute(builder: (context) => const LoginPage()),
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF003366),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
-                          ),
+                          backgroundColor: usfqRed,
+                          shape: const StadiumBorder(),
+                          elevation: 2,
                         ),
                         child: const Text(
                           "INICIAR SESIÓN",
@@ -73,11 +88,9 @@ class WelcomePage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    
-                    // Botón de Registro
                     SizedBox(
                       width: double.infinity,
-                      height: 55,
+                      height: 50,
                       child: OutlinedButton(
                         onPressed: () {
                           Navigator.push(
@@ -86,26 +99,32 @@ class WelcomePage extends StatelessWidget {
                           );
                         },
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFF003366), width: 2),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
-                          ),
+                          side: const BorderSide(color: usfqRed, width: 2),
+                          shape: const StadiumBorder(),
                         ),
                         child: const Text(
                           "REGISTRARSE",
-                          style: TextStyle(
-                            color: Color(0xFF003366),
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: TextStyle(color: usfqRed, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+          
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            width: double.infinity,
+            color: usfqRed,
+            child: const Text(
+              "© 2025 Eye of the Dragon. USFQ",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white, fontSize: 12),
+            ),
+          ),
+        ],
       ),
     );
   }
