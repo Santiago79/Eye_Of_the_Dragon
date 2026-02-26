@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:app_movil_cam_maps/services/auth_service.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -8,155 +9,95 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
-  // Color danger de tu CSS y Bootstrap: #dc3545
   static const Color usfqRed = Color(0xFFDC3545);
+  static const Color bgColor = Color(0xFF161625);
+  
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final AuthService _authService = AuthService();
   
   String? _selectedRol;
+  bool _isLoading = false;
+
+  void _handleRegister() async {
+    if (_selectedRol == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Por favor selecciona un rol")));
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    bool success = await _authService.register(
+      _emailController.text.trim(),
+      _passwordController.text.trim(),
+      _nameController.text.trim(),
+      _selectedRol!,
+    );
+
+    setState(() => _isLoading = false);
+
+    if (success) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Registro exitoso. Ahora puedes iniciar sesión.")));
+      Navigator.pop(context);
+    } else {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error en el registro. Verifica los datos.")));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA), // bg-light en CSS
+      backgroundColor: bgColor,
       appBar: AppBar(
         backgroundColor: usfqRed,
-        elevation: 0,
-        title: const Text(
-          "EYE OF THE DRAGON",
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-        ),
+        title: const Text("CREAR CUENTA", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 30),
-            // Logo del proyecto (identidad visual)
-            Image.asset(
-              'images/logo.webp',
-              height: 80,
-              fit: BoxFit.contain,
-            ),
-            const SizedBox(height: 20),
-            
-            // Contenedor del Formulario (Simulando la card del HTML)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(15),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
-                    )
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: const Color(0xFF2A2A3B), borderRadius: BorderRadius.circular(15)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Nombre completo", style: TextStyle(color: Colors.white)),
+                TextField(controller: _nameController, decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
+                const SizedBox(height: 15),
+                const Text("Correo electrónico", style: TextStyle(color: Colors.white)),
+                TextField(controller: _emailController, decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
+                const SizedBox(height: 15),
+                const Text("Contraseña", style: TextStyle(color: Colors.white)),
+                TextField(controller: _passwordController, obscureText: true, decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
+                const SizedBox(height: 15),
+                const Text("Rol", style: TextStyle(color: Colors.white)),
+                DropdownButtonFormField<String>(
+                  value: _selectedRol,
+                  items: const [
+                    DropdownMenuItem(value: "administrador", child: Text("Administrador")),
+                    DropdownMenuItem(value: "seguridad", child: Text("Cuerpo de Seguridad")),
                   ],
+                  onChanged: (val) => setState(() => _selectedRol = val),
+                  decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Crear Cuenta",
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: usfqRed,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    
-                    // Campo Nombre (name="nombre")
-                    const Text("Nombre completo", style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    TextField(
-                      decoration: InputDecoration(
-                        hintText: "Nombre",
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 15),
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                    
-                    // Campo Correo (name="correo")
-                    const Text("Correo electrónico", style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    TextField(
-                      decoration: InputDecoration(
-                        hintText: "ejemplo@correo.com",
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 15),
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                    
-                    // Campo Password (name="password")
-                    const Text("Contraseña", style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    TextField(
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        hintText: "********",
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 15),
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-
-                    // Selector de Rol (select name="rol" en HTML)
-                    const Text("Rol", style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      decoration: InputDecoration(
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 15),
-                      ),
-                      value: _selectedRol,
-                      hint: const Text("Selecciona un rol"),
-                      items: const [
-                        DropdownMenuItem(value: "administrador", child: Text("Administrador")),
-                        DropdownMenuItem(value: "seguridad", child: Text("Cuerpo de Seguridad")),
-                      ],
-                      onChanged: (val) => setState(() => _selectedRol = val),
-                    ),
-                    const SizedBox(height: 30),
-                    
-                    // Botón Registrarse (rounded-pill btn-danger)
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          // Aquí irá la lógica de registro
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: usfqRed,
-                          shape: const StadiumBorder(),
-                        ),
-                        child: const Text(
-                          "REGISTRARSE",
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 30),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _handleRegister,
+                    style: ElevatedButton.styleFrom(backgroundColor: usfqRed, shape: const StadiumBorder()),
+                    child: _isLoading 
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text("REGISTRARSE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
                 ),
-              ),
+              ],
             ),
-            const SizedBox(height: 30),
-            
-            // Footer idéntico al HTML
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              width: double.infinity,
-              color: usfqRed,
-              child: const Text(
-                "© 2025 Eye of the Dragon. USFQ",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white, fontSize: 12),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

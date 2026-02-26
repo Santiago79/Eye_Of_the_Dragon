@@ -1,4 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
+import 'dart:io';
+import 'dart:convert';
+import 'package:path/path.dart' as p;
+import '../services/api_service.dart';
 
 class AnalisisPage extends StatefulWidget {
   const AnalisisPage({super.key});
@@ -8,160 +14,193 @@ class AnalisisPage extends StatefulWidget {
 }
 
 class _AnalisisPageState extends State<AnalisisPage> {
-  String seccionActiva = "DETECCIÓN"; // Simula las pestañas del HTML
-  static const Color bgColor = Color(0xFF1E1E2F);
-  static const Color cardColor = Color(0xFF2A2A3B);
+  static const Color bgColor = Color(0xFF161625);
+  static const Color cardColor = Color(0xFF232335);
   static const Color usfqRed = Color(0xFFDC3545);
+  
+  File? _selectedFile;
+  String? fileName;
+  bool _isAnalyzing = false;
+  List<dynamic> _activeAnalyses = [];
+
+  final TextEditingController _inicioController = TextEditingController(text: "0");
+  final TextEditingController _finController = TextEditingController(text: "60");
+
+  @override
+  void initState() {
+    super.initState();
+    _checkStatus(); // Cargar estado inicial
+  }
+
+  // 1. SELECCIÓN DE ARCHIVO
+  Future<void> _pickFile() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.video);
+    if (result != null) {
+      setState(() {
+        _selectedFile = File(result.files.first.path!);
+        fileName = result.files.first.name;
+      });
+    }
+  }
+
+  // 2. LANZAR ANÁLISIS (POST)
+  Future<void> _enviarAnalisis() async {
+    if (_selectedFile == null) return;
+    setState(() => _isAnalyzing = true);
+
+    try {
+      // Importante: Sacar el token de tu ApiService/SecureStorage
+      String? token = await ApiService().getToken(); 
+
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse("http://10.123.186.26:8001/cvpack/video-analysis/")
+      );
+
+      // Headers de Autorización para saltar el @login_required
+      request.headers['Authorization'] = 'Bearer $token';
+
+      // Campos según tu VideoAnalysisForm en Django
+      request.fields['start_time'] = _inicioController.text;
+      request.fields['end_time'] = _finController.text;
+      request.fields['people_threshold'] = "5"; // Valor por defecto
+      
+      // El nombre del campo DEBE ser video_files según tu views.py
+      request.files.add(await http.MultipartFile.fromPath(
+        'video_files', 
+        _selectedFile!.path,
+        filename: p.basename(_selectedFile!.path),
+      ));
+
+      var response = await request.send();
+
+      if (response.statusCode == 200 || response.statusCode == 302) {
+        _showSnackBar("🚀 Análisis enviado al i9");
+        _checkStatus();
+      } else {
+        _showSnackBar("Error: ${response.statusCode}");
+      }
+    } catch (e) {
+      _showSnackBar("Error de conexión");
+    } finally {
+      setState(() => _isAnalyzing = false);
+    }
+  }
+
+  // 3. CONSULTAR ESTADO (GET)
+  Future<void> _checkStatus() async {
+    try {
+      String? token = await ApiService().getToken();
+      final response = await http.get(
+        Uri.parse("http://10.123.186.26:8001/cvpack/status/"),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          _activeAnalyses = data['threads'];
+        });
+      }
+    } catch (e) {
+      print("Error status: $e");
+    }
+  }
+
+  void _showSnackBar(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: usfqRed,
-        title: const Text("ANÁLISIS DE VIDEO", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-        elevation: 0,
-      ),
-      body: Column(
-        children: [
-          // Pestañas (Tabs) igual que en tu HTML .square-tab
-          Container(
-            color: const Color(0xFF161625),
-            child: Row(
-              children: [
-                _buildTab("DETECCIÓN"),
-                _buildTab("HILOS"),
-                _buildTab("HISTORIAL"),
-              ],
-            ),
-          ),
-
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Área de Carga (Simulando el Dropzone/Form de tu HTML)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(30),
-                    decoration: BoxDecoration(
-                      color: cardColor,
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: usfqRed.withOpacity(0.5), width: 1),
-                    ),
-                    child: Column(
-                      children: [
-                        const Icon(Icons.cloud_upload_outlined, color: Colors.white54, size: 50),
-                        const SizedBox(height: 15),
-                        const Text(
-                          "Subir video para análisis",
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          "Formatos soportados: MP4, AVI",
-                          style: TextStyle(color: Colors.white54, fontSize: 12),
-                        ),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          onPressed: () {},
-                          style: ElevatedButton.styleFrom(backgroundColor: usfqRed),
-                          child: const Text("SELECCIONAR ARCHIVO"),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 30),
-                  const Text(
-                    "RESULTADOS RECIENTES",
-                    style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-                  ),
-                  const SizedBox(height: 15),
-
-                  // Galería de Resultados (Simulando la rejilla de thumbnails del HTML)
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 15,
-                      mainAxisSpacing: 15,
-                    ),
-                    itemCount: 4, // Ejemplos
-                    itemBuilder: (context, index) {
-                      return _buildResultCard(index);
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTab(String label) {
-    bool isActive = seccionActiva == label;
-    return Expanded(
-      child: InkWell(
-        onTap: () => setState(() => seccionActiva = label),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 15),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: isActive ? usfqRed : Colors.transparent,
-                width: 3,
-              ),
-            ),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: isActive ? Colors.white : Colors.white54,
-              fontWeight: FontWeight.bold,
-              fontSize: 11,
-            ),
-          ),
+      appBar: AppBar(title: const Text("CVPack - Análisis"), backgroundColor: usfqRed),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            // Panel de subida
+            _buildUploadPanel(),
+            const SizedBox(height: 25),
+            // Panel de hilos activos
+            _buildStatusPanel(),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildResultCard(int index) {
+  Widget _buildUploadPanel() {
     return Container(
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(10),
-        image: const DecorationImage(
-          image: NetworkImage("https://via.placeholder.com/150"), // Aquí iría el frame analizado
-          fit: BoxFit.cover,
-          opacity: 0.6,
-        ),
-      ),
-      child: Stack(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(10)),
+      child: Column(
         children: [
-          Positioned(
-            bottom: 8,
-            left: 8,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("Detección #102", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                Text("Persona detectada", style: TextStyle(color: Colors.greenAccent.shade400, fontSize: 9)),
-              ],
+          ListTile(
+            title: Text(fileName ?? "Seleccionar Video", style: const TextStyle(color: Colors.white)),
+            trailing: const Icon(Icons.attach_file, color: Colors.white),
+            onTap: _pickFile,
+            tileColor: Colors.white10,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          const SizedBox(height: 15),
+          Row(
+            children: [
+              Expanded(child: _timeField("Inicio (s)", _inicioController)),
+              const SizedBox(width: 15),
+              Expanded(child: _timeField("Fin (s)", _finController)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isAnalyzing ? null : _enviarAnalisis,
+              style: ElevatedButton.styleFrom(backgroundColor: usfqRed),
+              child: _isAnalyzing ? const CircularProgressIndicator() : const Text("LANZAR EN I9"),
             ),
-          ),
-          const Center(
-            child: Icon(Icons.play_circle_fill, color: Colors.white, size: 30),
-          ),
+          )
         ],
       ),
+    );
+  }
+
+  Widget _buildStatusPanel() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(10)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Hilos de Análisis", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 15),
+          _activeAnalyses.isEmpty 
+            ? const Text("No hay procesos activos.", style: TextStyle(color: Colors.white38))
+            : ListView.builder(
+                shrinkWrap: true,
+                itemCount: _activeAnalyses.length,
+                itemBuilder: (context, index) {
+                  final t = _activeAnalyses[index];
+                  return ListTile(
+                    title: Text(t['name'], style: const TextStyle(color: Colors.white, fontSize: 12)),
+                    subtitle: Text("Estado: ${t['status']}", style: TextStyle(color: t['status'] == 'running' ? Colors.orange : Colors.green)),
+                    trailing: t['status'] == 'finished' ? const Icon(Icons.download, color: Colors.white) : const CircularProgressIndicator(strokeWidth: 2),
+                  );
+                },
+              )
+        ],
+      ),
+    );
+  }
+
+  Widget _timeField(String label, TextEditingController controller) {
+    return TextField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(labelText: label, labelStyle: const TextStyle(color: Colors.white60)),
     );
   }
 }

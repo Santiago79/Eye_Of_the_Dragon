@@ -1,127 +1,99 @@
 import 'package:flutter/material.dart';
-import "package:app_movil_cam_maps/vistas/home_page.dart";
+import 'package:app_movil_cam_maps/vistas/home_page.dart';
+import 'package:app_movil_cam_maps/services/auth_service.dart';
+import 'package:app_movil_cam_maps/services/api_service.dart';
 
-class LoginPage extends StatelessWidget {
+class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
   @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final AuthService _authService = AuthService();
+  bool _isLoading = false;
+
+  void _handleLogin() async {
+    setState(() => _isLoading = true);
+    
+    bool success = await _authService.login(
+      _emailController.text.trim(),
+      _passwordController.text.trim(),
+    );
+
+    setState(() => _isLoading = false);
+
+    if (success) {
+      if (!mounted) return;
+      await ApiService().startAnalysis();
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomePage()));
+    } else {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Error: Credenciales incorrectas")),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Color danger de tu CSS: #dc3545
     const Color usfqRed = Color(0xFFDC3545);
+    const Color bgColor = Color(0xFF161625);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA), // bg-light del CSS
+      backgroundColor: bgColor,
       appBar: AppBar(
         backgroundColor: usfqRed,
-        elevation: 0,
-        title: const Text(
-          "EYE OF THE DRAGON",
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-        ),
+        title: const Text("EYE OF THE DRAGON", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
       ),
       body: SingleChildScrollView(
         child: Column(
           children: [
             const SizedBox(height: 40),
-            // Logo del proyecto
-            Image.asset(
-              'images/logo.webp',
-              height: 100,
-              fit: BoxFit.contain,
-            ),
+            Image.asset('images/logo.png', height: 100),
             const SizedBox(height: 30),
-            
-            // Contenedor del Formulario (Simulando la card del HTML)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 25),
               child: Container(
                 padding: const EdgeInsets.all(25),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: const Color(0xFF2A2A3B),
                   borderRadius: BorderRadius.circular(15),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
-                    )
-                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "Iniciar Sesión",
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: usfqRed,
-                      ),
-                    ),
+                    const Text("Iniciar Sesión", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: usfqRed)),
                     const SizedBox(height: 25),
-                    
-                    // Campo Correo (name="correo" en tu HTML)
-                    const Text("Correo electrónico", style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
+                    const Text("Correo electrónico", style: TextStyle(color: Colors.white)),
                     TextField(
-                      decoration: InputDecoration(
-                        hintText: "ejemplo@correo.com",
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
+                      controller: _emailController,
+                      decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
                     ),
                     const SizedBox(height: 20),
-                    
-                    // Campo Password (name="password" en tu HTML)
-                    const Text("Contraseña", style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
+                    const Text("Contraseña", style: TextStyle(color: Colors.white)),
                     TextField(
+                      controller: _passwordController,
                       obscureText: true,
-                      decoration: InputDecoration(
-                        hintText: "********",
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
+                      decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
                     ),
                     const SizedBox(height: 35),
-                    
-                    // Botón Ingresar (rounded-pill btn-danger)
                     SizedBox(
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (context) => const HomePage()));
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: usfqRed,
-                          shape: const StadiumBorder(),
-                          
-                        ),
-                        
-                        child: const Text(
-                          "INGRESAR",
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                        ),
+                        onPressed: _isLoading ? null : _handleLogin,
+                        style: ElevatedButton.styleFrom(backgroundColor: usfqRed, shape: const StadiumBorder()),
+                        child: _isLoading 
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text("INGRESAR", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                       ),
                     ),
                   ],
                 ),
-              ),
-            ),
-            const SizedBox(height: 40),
-            
-            // Footer igual al HTML
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              width: double.infinity,
-              color: usfqRed,
-              child: const Text(
-                "© 2025 Eye of the Dragon. USFQ",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white, fontSize: 12),
               ),
             ),
           ],

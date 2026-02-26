@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
-import 'login_page.dart';
-import 'register_page.dart';
 
 class WelcomePage extends StatelessWidget {
   const WelcomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // Definición de colores institucionales EOTD - USFQ
     const Color usfqRed = Color(0xFFDC3545);
+    const Color bgColor = Color(0xFF161625);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: bgColor,
       body: Column(
         children: [
+          // Header Institucional
           Container(
             padding: const EdgeInsets.only(top: 50, bottom: 15, left: 20, right: 20),
             width: double.infinity,
@@ -23,7 +24,7 @@ class WelcomePage extends StatelessWidget {
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
-                fontSize: 12,
+                fontSize: 14,
                 letterSpacing: 1.2,
               ),
             ),
@@ -31,20 +32,19 @@ class WelcomePage extends StatelessWidget {
           
           Expanded(
             child: Container(
-              color: const Color(0xFFF8F9FA), 
+              color: bgColor,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 40),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // AQUÍ VA TU LOGO WEBP
+                    // Logo de la Tesis / Proyecto
                     Image.asset(
-                      'images/logo.webp', // Ruta que configuraste en pubspec.yaml
-                      height: 120, // Ajusta según el tamaño de tu archivo
+                      'images/logo.png',
+                      height: 120,
                       fit: BoxFit.contain,
                       errorBuilder: (context, error, stackTrace) {
-                        // Esto se muestra si la ruta está mal o el archivo no existe
-                        return const Icon(Icons.broken_image, size: 80, color: Colors.grey);
+                        return const Icon(Icons.remove_red_eye, size: 80, color: usfqRed);
                       },
                     ),
                     const SizedBox(height: 20),
@@ -59,22 +59,21 @@ class WelcomePage extends StatelessWidget {
                         letterSpacing: -1,
                       ),
                     ),
-                    const SizedBox(height: 10),
                     const Text(
-                      "Sistema de Monitoreo Inteligente",
-                      style: TextStyle(color: Colors.black54, fontSize: 16),
+                      "SISTEMA DE MONITOREO INTELIGENTE",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white54, fontSize: 10, letterSpacing: 1.5),
                     ),
                     const SizedBox(height: 50),
                     
+                    // Botón de Iniciar Sesión (Ruta Nombrada)
                     SizedBox(
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton(
                         onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const LoginPage()),
-                          );
+                          // Navegación usando el nombre configurado en main.dart
+                          Navigator.pushNamed(context, '/login');
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: usfqRed,
@@ -88,15 +87,15 @@ class WelcomePage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
+                    
+                    // Botón de Registro (Ruta Nombrada)
                     SizedBox(
                       width: double.infinity,
                       height: 50,
                       child: OutlinedButton(
                         onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const RegisterPage()),
-                          );
+                          // Navegación usando el nombre configurado en main.dart
+                          Navigator.pushNamed(context, '/register');
                         },
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: usfqRed, width: 2),
@@ -114,14 +113,15 @@ class WelcomePage extends StatelessWidget {
             ),
           ),
           
+          // Footer de Tesis
           Container(
             padding: const EdgeInsets.symmetric(vertical: 20),
             width: double.infinity,
             color: usfqRed,
             child: const Text(
-              "© 2025 Eye of the Dragon. USFQ",
+              "© 2026 Eye of the Dragon. USFQ",
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white, fontSize: 12),
+              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w300),
             ),
           ),
         ],

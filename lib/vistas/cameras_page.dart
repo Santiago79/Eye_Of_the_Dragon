@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../services/api_service.dart';
+import '../models/mjpeg_player.dart';
 
 class CamerasPage extends StatefulWidget {
   const CamerasPage({super.key});
@@ -8,157 +12,217 @@ class CamerasPage extends StatefulWidget {
 }
 
 class _CamerasPageState extends State<CamerasPage> {
-  static const Color bgColor = Color(0xFF1E1E2F);
-  static const Color cardColor = Color(0xFF2A2A3B);
-  static const Color usfqRed = Color(0xFFDC3545);
+  final Color usfqRed = const Color(0xFFE2231A);
+  final Color backgroundColor = const Color(0xFF0F0F0F);
+  final Color cardColor = const Color(0xFF1A1A1A);
 
-  // Simulación de datos del servicio de cámaras
-  double threshold = 0.5;
+  List<dynamic> cameras = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCameras();
+  }
+
+  Future<void> _fetchCameras() async {
+    try {
+      // Usamos tu ApiService para traer la lista de cámaras
+      final data = await ApiService().getCameras();
+      setState(() {
+        cameras = data;
+        isLoading = false;
+      });
+    } catch (e) {
+      print("Error cargando cámaras: $e");
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  // En lib/pages/cameras_page.dart
+Future<void> _updateThreshold(String camId, double value) async {
+  // Asegúrate de que esta URL sea EXACTAMENTE la que sale en el log del terminal
+  final url = Uri.parse("http://10.123.186.26:8001/camaras/cambiar_threshold/$camId/"); 
+  
+  try {
+    final response = await http.post(
+      url,
+      // Django necesita el body así para leerlo con request.POST.get
+      body: {'threshold': value.toInt().toString()}, 
+    );
+
+    print("Response status: ${response.statusCode}");
+    print("Response body: ${response.body}");
+  } catch (e) {
+    print("Error: $e");
+  }
+}
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        backgroundColor: usfqRed,
-        title: const Text("SISTEMA DE MONITOREO", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+        title: const Text("SISTEMA EOTD", 
+          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         actions: [
-          _buildMemoryIndicator("RAM", "45%"),
-          const SizedBox(width: 15),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _fetchCameras,
+          )
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(15),
-        child: Column(
-          children: [
-            // Panel de Control Global (Basado en tu info de logs y sistema)
-            _buildSystemStatus(),
-            const SizedBox(height: 20),
-
-            // Lista de Cámaras con Analítica (Basado en panel.html)
-            _buildCameraCard(
-              id: "CAM-01",
-              nombre: "Acceso Principal USFQ",
-              estado: "ACTIVO",
-              detecciones: "12 personas",
+      body: isLoading
+          ? Center(child: CircularProgressIndicator(color: usfqRed))
+          : ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              itemCount: cameras.length,
+              itemBuilder: (context, index) {
+                return _buildCameraCard(cameras[index]);
+              },
             ),
-            const SizedBox(height: 15),
-            _buildCameraCard(
-              id: "CAM-02",
-              nombre: "Parqueadero Estudiantes",
-              estado: "ALERTA",
-              detecciones: "Densidad Alta",
-            ),
-          ],
-        ),
-      ),
     );
   }
 
-  Widget _buildSystemStatus() {
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: const Color(0xFF161625),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _statusItem(Icons.storage, "LOGS", "CSV OK"),
-          _statusItem(Icons.analytics, "DETECCIÓN", "Running"),
-          _statusItem(Icons.speed, "LATENCIA", "45ms"),
-        ],
-      ),
-    );
-  }
+  Widget _buildCameraCard(dynamic cameraData) {
+    // CAMBIO CLAVE: Accedemos como objeto, no como mapa
+    final String camId = cameraData.camId.toString(); 
+    final String name = cameraData.name ?? "Cámara";
+    final bool isActive = cameraData.isActive ?? false;
+    
+    // Usamos el valor que viene del objeto Camera
+    int threshold = cameraData.peopleThreshold; 
 
-  Widget _buildCameraCard({required String id, required String nombre, required String estado, required String detecciones}) {
+    final String streamUrl = "http://10.123.186.26:8001/camaras/$camId/live_feed/";
+
     return Container(
+      // ... resto del código del container igual ...
       padding: const EdgeInsets.all(15),
+      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: estado == "ALERTA" ? usfqRed : Colors.white10),
+        border: Border.all(
+          color: isActive ? Colors.white10 : usfqRed.withOpacity(0.5),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Cabecera: Nombre y Estado
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(nombre, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: estado == "ALERTA" ? usfqRed : Colors.green.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(5),
+              Expanded(
+                child: Text(
+                  name.toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white, 
+                    fontWeight: FontWeight.bold, 
+                    fontSize: 14
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                child: Text(estado, style: TextStyle(color: estado == "ALERTA" ? Colors.white : Colors.greenAccent, fontSize: 10)),
               ),
+              _buildBadge(isActive),
             ],
           ),
           const SizedBox(height: 15),
           
-          // Área de Video/Gráfica (Simulando el video_plot_container del HTML)
+          // Contenedor de Video (Procesamiento YOLO)
           Container(
-            height: 180,
+            height: 200,
             width: double.infinity,
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: Colors.black,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: const Center(
-              child: Icon(Icons.videocam, color: Colors.white24, size: 50),
-            ),
+            child: isActive 
+              ? MjpegPlayer(url: streamUrl, fit: BoxFit.cover)
+              : const Center(
+                  child: Text("SISTEMA DESACTIVADO", 
+                    style: TextStyle(color: Colors.white24, fontSize: 12)),
+                ),
           ),
           
-          const SizedBox(height: 15),
+          const SizedBox(height: 20),
           
-          // Control de Threshold (Igual al slider de tu HTML)
+          // Control de Límite (Threshold)
           Row(
             children: [
-              const Text("Sensibilidad:", style: TextStyle(color: Colors.white70, fontSize: 12)),
+              const Icon(Icons.group_outlined, color: Colors.white54, size: 18),
+              const SizedBox(width: 10),
+              const Text("LÍMITE:", style: TextStyle(color: Colors.white70, fontSize: 11)),
               Expanded(
-                child: Slider(
-                  value: threshold,
-                  activeColor: usfqRed,
-                  onChanged: (val) => setState(() => threshold = val),
-                ),
+                child: // Busca el Slider dentro de _buildCameraCard y reemplázalo con este:
+                  Slider(
+                    value: cameraData.peopleThreshold.toDouble(), // Acceso con punto
+                    min: 1,
+                    max: 30,
+                    activeColor: usfqRed,
+                    inactiveColor: Colors.white10,
+                    onChanged: (val) {
+                      setState(() {
+                        // CAMBIO CLAVE: Asignación directa a la propiedad del objeto
+                        cameraData.peopleThreshold = val.toInt(); 
+                      });
+                    },
+                    onChangeEnd: (val) => _updateThreshold(camId, val),
+                  ),
               ),
-              Text(threshold.toStringAsFixed(1), style: const TextStyle(color: Colors.white)),
+              Container(
+                width: 35,
+                alignment: Alignment.centerRight,
+                child: Text("${threshold.toInt()}", 
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+              ),
             ],
           ),
           
-          // Dato de los Logs
-          Text("Último Log: $detecciones", style: const TextStyle(color: Colors.white54, fontSize: 11)),
+          const Divider(color: Colors.white10, height: 25),
+          
+          // ID del dispositivo
+          Text("ID DISPOSITIVO: $camId", 
+            style: const TextStyle(color: Colors.white38, fontSize: 10, letterSpacing: 0.5)),
         ],
       ),
     );
   }
 
-  Widget _buildMemoryIndicator(String label, String value) {
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.white24),
-          borderRadius: BorderRadius.circular(20),
+  Widget _buildBadge(bool active) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: active ? Colors.green.withOpacity(0.1) : usfqRed.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: active ? Colors.green.withOpacity(0.5) : usfqRed.withOpacity(0.5),
+          width: 1,
         ),
-        child: Text("$label: $value", style: const TextStyle(color: Colors.white70, fontSize: 10)),
       ),
-    );
-  }
-
-  Widget _statusItem(IconData icon, String label, String value) {
-    return Column(
-      children: [
-        Icon(icon, color: usfqRed, size: 20),
-        const SizedBox(height: 5),
-        Text(label, style: const TextStyle(color: Colors.white38, fontSize: 9)),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-      ],
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircleAvatar(
+            radius: 3,
+            backgroundColor: active ? Colors.green : usfqRed,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            active ? "LIVE" : "OFFLINE",
+            style: TextStyle(
+              color: active ? Colors.green : usfqRed,
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
