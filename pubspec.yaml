@@ -14,6 +14,9 @@ dependencies:
   latlong2: ^0.9.1
   cupertino_icons: ^1.0.6
   map: ^2.0.2
+  file_picker: ^8.1.2
+  http: ^1.6.0
+  shared_preferences: ^2.5.4
 
 dev_dependencies:
   flutter_test:
