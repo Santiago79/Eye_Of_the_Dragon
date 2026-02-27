@@ -75,7 +75,7 @@ class _AnalisisPageState extends State<AnalisisPage> {
       var response = await request.send();
 
       if (response.statusCode == 200 || response.statusCode == 302) {
-        _showSnackBar("🚀 Análisis enviado al i9");
+        _showSnackBar("🚀 Análisis enviado");
         _checkStatus();
       } else {
         _showSnackBar("Error: ${response.statusCode}");
@@ -158,7 +158,7 @@ class _AnalisisPageState extends State<AnalisisPage> {
             child: ElevatedButton(
               onPressed: _isAnalyzing ? null : _enviarAnalisis,
               style: ElevatedButton.styleFrom(backgroundColor: usfqRed),
-              child: _isAnalyzing ? const CircularProgressIndicator() : const Text("LANZAR EN I9"),
+              child: _isAnalyzing ? const CircularProgressIndicator() : const Text("ANALIZAR VIDEO"),
             ),
           )
         ],
