@@ -65,13 +65,13 @@ class _RegisterPageState extends State<RegisterPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text("Nombre completo", style: TextStyle(color: Colors.white)),
-                TextField(controller: _nameController, decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
+                TextField(style: const TextStyle(color: Colors.black),controller: _nameController, decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
                 const SizedBox(height: 15),
                 const Text("Correo electrónico", style: TextStyle(color: Colors.white)),
-                TextField(controller: _emailController, decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
+                TextField(style: const TextStyle(color: Colors.black),controller: _emailController, decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
                 const SizedBox(height: 15),
                 const Text("Contraseña", style: TextStyle(color: Colors.white)),
-                TextField(controller: _passwordController, obscureText: true, decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
+                TextField(style: const TextStyle(color: Colors.black),  controller: _passwordController, obscureText: true, decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
                 const SizedBox(height: 15),
                 const Text("Rol", style: TextStyle(color: Colors.white)),
                 DropdownButtonFormField<String>(

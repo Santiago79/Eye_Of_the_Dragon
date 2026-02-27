@@ -70,12 +70,14 @@ class _LoginPageState extends State<LoginPage> {
                     const SizedBox(height: 25),
                     const Text("Correo electrónico", style: TextStyle(color: Colors.white)),
                     TextField(
+                      style: const TextStyle(color: Colors.black),
                       controller: _emailController,
                       decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
                     ),
                     const SizedBox(height: 20),
                     const Text("Contraseña", style: TextStyle(color: Colors.white)),
                     TextField(
+                      style: const TextStyle(color: Colors.black),
                       controller: _passwordController,
                       obscureText: true,
                       decoration: InputDecoration(filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
