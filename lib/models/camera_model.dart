@@ -2,8 +2,9 @@ class Camera {
   final String camId;
   final String name;
   final String rtspUrl;
-  int peopleThreshold; // <-- Quitamos 'final' para que el Slider pueda modificarlo
+  int peopleThreshold;
   final bool isActive;
+  int peopleCount;
 
   Camera({
     required this.camId,
@@ -11,6 +12,7 @@ class Camera {
     required this.rtspUrl,
     required this.peopleThreshold,
     required this.isActive,
+    this.peopleCount = 0,
   });
 
   factory Camera.fromJson(Map<String, dynamic> json) {

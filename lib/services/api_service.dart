@@ -1,23 +1,21 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
-import '../models/camera_model.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
+import '../models/camera_model.dart'; // Ajusta la ruta si es necesario
 
 class ApiService {
-  // Configuración de la URL base según tu terminal de Arch
-  static const String baseUrl = "http://10.123.186.26:8001";
+  // IP centralizada para todo el servicio
+  final String _baseUrl = "http://172.16.150.27:8001";
+  String get baseUrl => _baseUrl; 
   
-  // Variable para almacenar el token (deberías setearla al hacer login)
-  // En api_service.dart temporalmente:
-static String? _token = "PEGA_AQUÍ_EL_TOKEN_LARGO_DEL_LOGIN";
+  // Variable estática para mantener la sesión viva
+  static String? _token;
 
   static void setToken(String token) {
     _token = token;
+    print("DEBUG JWT: Token guardado en ApiService");
   }
 
-  // Helper para headers
+  // Generador automático de headers con el Token
   Map<String, String> _getHeaders() {
     return {
       "Content-Type": "application/json",
@@ -25,19 +23,24 @@ static String? _token = "PEGA_AQUÍ_EL_TOKEN_LARGO_DEL_LOGIN";
     };
   }
 
+  // Añade esta función de vuelta para que analisis_page pueda leer el token
+  Future<String?> getToken() async {
+    return _token;
+  }
+
   // ---------------------------------------------------------
-  // SECCIÓN: CÁMARAS
+  // ENDPOINTS DE LA API REST (Usan Token JWT)
   // ---------------------------------------------------------
 
   Future<List<Camera>> getCameras() async {
-    final url = Uri.parse('$baseUrl/api/cameras/');
+    final url = Uri.parse('$_baseUrl/api/cameras/');
     final response = await http.get(url, headers: _getHeaders());
 
     if (response.statusCode == 200) {
       final dynamic decodedData = json.decode(response.body);
-      
       List<dynamic> jsonResponse;
-      // Verificamos si Django devuelve los datos en la llave 'results' (paginación)
+      
+      // Manejo de paginación de Django REST Framework por si acaso
       if (decodedData is Map && decodedData.containsKey('results')) {
         jsonResponse = decodedData['results'];
       } else {
@@ -52,58 +55,51 @@ static String? _token = "PEGA_AQUÍ_EL_TOKEN_LARGO_DEL_LOGIN";
     }
   }
 
-  // Método para el Slider corregido con el prefijo /api/
-  Future<void> updateThreshold(String camId, int newValue) async {
-    final url = Uri.parse('$baseUrl/api/cameras/$camId/threshold/');
+  Future<void> updateThreshold(String camId, double newValue) async {
+    // Ruta hacia el API View: /api/cameras/<cam_id>/threshold/
+    final url = Uri.parse('$_baseUrl/api/cameras/$camId/threshold/');
     final response = await http.patch(
       url,
       headers: _getHeaders(),
-      body: json.encode({"people_threshold": newValue}),
+      body: json.encode({"people_threshold": newValue.toInt()}),
     );
     
     if (response.statusCode != 200) {
-      throw Exception('Error al actualizar umbral: ${response.body}');
+      print('Error al actualizar umbral: ${response.body}');
     }
   }
 
-    // En ApiService.dart
+  // ---------------------------------------------------------
+  // ENDPOINTS TRADICIONALES DE DJANGO (App 'camaras')
+  // ---------------------------------------------------------
+
+  // En tu api_service.dart
+  // Cambiamos el tipo de retorno de Future<double> a Future<Map<String, dynamic>>
+  Future<Map<String, dynamic>> getDensity(String camId) async {
+    final url = Uri.parse('$_baseUrl/camaras/$camId/density_data/');
+    try {
+      final response = await http.get(url, headers: _getHeaders());
+      if (response.statusCode == 200) {
+        // Devolvemos el JSON completo que incluye 'values' (el arreglo de la gráfica)
+        return json.decode(response.body);
+      } else {
+        return {};
+      }
+    } catch (e) {
+      print("Error obteniendo densidad para $camId: $e");
+      return {};
+    }
+  }
+  
   Future<void> startAnalysis() async {
     try {
-      // Nota: Esta ruta no suele llevar /api/ porque está en camaras/urls.py
-      final url = Uri.parse('$baseUrl/camaras/start_cameras/');
-      final response = await http.get(url);
+      final url = Uri.parse('$_baseUrl/camaras/start_cameras/');
+      final response = await http.get(url, headers: _getHeaders());
       if (response.statusCode == 200) {
         print("Análisis de YOLO iniciado correctamente");
       }
     } catch (e) {
       print("Error al iniciar análisis: $e");
     }
-  }
-
-  // ---------------------------------------------------------
-  // SECCIÓN: CVPACK (Análisis de Video)
-  // ---------------------------------------------------------
-
-  Future<void> uploadVideoForAnalysis(String filePath, int start, int end) async {
-    final url = Uri.parse('$baseUrl/api/cvpack/analyze/');
-    
-    var request = http.MultipartRequest('POST', url);
-    request.headers.addAll(_getHeaders());
-    
-    request.files.add(await http.MultipartFile.fromPath('video', filePath));
-    request.fields['start_time'] = start.toString();
-    request.fields['end_time'] = end.toString();
-
-    var streamedResponse = await request.send();
-    var response = await http.Response.fromStream(streamedResponse);
-
-    if (response.statusCode != 201) {
-      throw Exception('Error en el análisis: ${response.body}');
-    }
-  }
-
-  Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('token'); // Asegúrate que este sea el nombre que usaste al guardar
   }
 }

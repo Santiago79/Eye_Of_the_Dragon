@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:io';
 import 'dart:convert';
 import 'package:path/path.dart' as p;
+import 'package:video_player/video_player.dart'; // <--- El nuevo reproductor nativo
 import '../services/api_service.dart';
 
 class AnalisisPage extends StatefulWidget {
@@ -29,10 +30,9 @@ class _AnalisisPageState extends State<AnalisisPage> {
   @override
   void initState() {
     super.initState();
-    _checkStatus(); // Cargar estado inicial
+    _checkStatus();
   }
 
-  // 1. SELECCIÓN DE ARCHIVO
   Future<void> _pickFile() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.video);
     if (result != null) {
@@ -43,29 +43,27 @@ class _AnalisisPageState extends State<AnalisisPage> {
     }
   }
 
-  // 2. LANZAR ANÁLISIS (POST)
   Future<void> _enviarAnalisis() async {
     if (_selectedFile == null) return;
     setState(() => _isAnalyzing = true);
 
     try {
-      // Importante: Sacar el token de tu ApiService/SecureStorage
       String? token = await ApiService().getToken(); 
+      String baseUrl = ApiService().baseUrl;
 
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse("http://10.123.186.26:8001/cvpack/video-analysis/")
+        Uri.parse("$baseUrl/cvpack/api/video-analysis/")
       );
 
-      // Headers de Autorización para saltar el @login_required
-      request.headers['Authorization'] = 'Bearer $token';
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
 
-      // Campos según tu VideoAnalysisForm en Django
       request.fields['start_time'] = _inicioController.text;
       request.fields['end_time'] = _finController.text;
-      request.fields['people_threshold'] = "5"; // Valor por defecto
+      request.fields['people_threshold'] = "5"; 
       
-      // El nombre del campo DEBE ser video_files según tu views.py
       request.files.add(await http.MultipartFile.fromPath(
         'video_files', 
         _selectedFile!.path,
@@ -74,26 +72,28 @@ class _AnalisisPageState extends State<AnalisisPage> {
 
       var response = await request.send();
 
-      if (response.statusCode == 200 || response.statusCode == 302) {
-        _showSnackBar("🚀 Análisis enviado");
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        _showSnackBar("🚀 Análisis enviado a la cola");
         _checkStatus();
       } else {
-        _showSnackBar("Error: ${response.statusCode}");
+        var respStr = await response.stream.bytesToString();
+        _showSnackBar("Error ${response.statusCode}: $respStr");
       }
     } catch (e) {
-      _showSnackBar("Error de conexión");
+      _showSnackBar("Error de conexión: $e");
     } finally {
       setState(() => _isAnalyzing = false);
     }
   }
 
-  // 3. CONSULTAR ESTADO (GET)
   Future<void> _checkStatus() async {
     try {
       String? token = await ApiService().getToken();
+      String baseUrl = ApiService().baseUrl;
+
       final response = await http.get(
-        Uri.parse("http://10.123.186.26:8001/cvpack/status/"),
-        headers: {'Authorization': 'Bearer $token'},
+        Uri.parse("$baseUrl/cvpack/api/status/"),
+        headers: token != null ? {'Authorization': 'Bearer $token'} : {},
       );
 
       if (response.statusCode == 200) {
@@ -103,7 +103,7 @@ class _AnalisisPageState extends State<AnalisisPage> {
         });
       }
     } catch (e) {
-      print("Error status: $e");
+      print("Error obteniendo status: $e");
     }
   }
 
@@ -120,10 +120,8 @@ class _AnalisisPageState extends State<AnalisisPage> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // Panel de subida
             _buildUploadPanel(),
             const SizedBox(height: 25),
-            // Panel de hilos activos
             _buildStatusPanel(),
           ],
         ),
@@ -157,8 +155,13 @@ class _AnalisisPageState extends State<AnalisisPage> {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: _isAnalyzing ? null : _enviarAnalisis,
-              style: ElevatedButton.styleFrom(backgroundColor: usfqRed),
-              child: _isAnalyzing ? const CircularProgressIndicator() : const Text("ANALIZAR VIDEO"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: usfqRed,
+                padding: const EdgeInsets.symmetric(vertical: 15)
+              ),
+              child: _isAnalyzing 
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                : const Text("ANALIZAR VIDEO", style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           )
         ],
@@ -174,19 +177,51 @@ class _AnalisisPageState extends State<AnalisisPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Hilos de Análisis", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("Hilos de Análisis", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              IconButton(
+                icon: const Icon(Icons.refresh, color: Colors.white70),
+                onPressed: _checkStatus,
+                tooltip: "Actualizar estado",
+              )
+            ],
+          ),
           const SizedBox(height: 15),
           _activeAnalyses.isEmpty 
             ? const Text("No hay procesos activos.", style: TextStyle(color: Colors.white38))
             : ListView.builder(
                 shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
                 itemCount: _activeAnalyses.length,
                 itemBuilder: (context, index) {
                   final t = _activeAnalyses[index];
-                  return ListTile(
-                    title: Text(t['name'], style: const TextStyle(color: Colors.white, fontSize: 12)),
-                    subtitle: Text("Estado: ${t['status']}", style: TextStyle(color: t['status'] == 'running' ? Colors.orange : Colors.green)),
-                    trailing: t['status'] == 'finished' ? const Icon(Icons.download, color: Colors.white) : const CircularProgressIndicator(strokeWidth: 2),
+                  bool isFinished = t['status'] == 'finished';
+                  bool isError = t['status'] == 'error';
+
+                  return Card(
+                    color: Colors.white10,
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: ListTile(
+                      title: Text(t['name'], style: const TextStyle(color: Colors.white, fontSize: 14)),
+                      subtitle: Text("Estado: ${t['status'].toUpperCase()}", 
+                        style: TextStyle(
+                          color: isFinished ? Colors.green : (isError ? Colors.red : Colors.orange),
+                          fontWeight: FontWeight.bold
+                        )
+                      ),
+                      trailing: isFinished 
+                        ? const Icon(Icons.check_circle, color: Colors.green) 
+                        : (isError ? const Icon(Icons.error, color: Colors.red) : const CircularProgressIndicator(strokeWidth: 2)),
+                      onTap: isFinished ? () {
+                        if (t['report_files'] != null && t['report_files'].isNotEmpty) {
+                          _mostrarResultados(t['report_files'][0]);
+                        } else {
+                          _showSnackBar("El reporte aún no está disponible.");
+                        }
+                      } : null,
+                    ),
                   );
                 },
               )
@@ -200,7 +235,173 @@ class _AnalisisPageState extends State<AnalisisPage> {
       controller: controller,
       keyboardType: TextInputType.number,
       style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(labelText: label, labelStyle: const TextStyle(color: Colors.white60)),
+      decoration: InputDecoration(
+        labelText: label, 
+        labelStyle: const TextStyle(color: Colors.white60),
+        enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+        focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: usfqRed)),
+      ),
+    );
+  }
+
+  // ==================== ZOOM DE IMÁGENES ====================
+  void _mostrarImagenGrande(String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(10),
+          child: Stack(
+            alignment: Alignment.topRight,
+            children: [
+              InteractiveViewer(
+                panEnabled: true,
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Image.network(imageUrl),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.pop(context),
+              )
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ==================== POPUP DE RESULTADOS ====================
+  void _mostrarResultados(Map<String, dynamic> reportes) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: cardColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: const Text("Resultados del Análisis", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (reportes['plot'] != null) ...[
+                  const Text("📊 Gráfica de Densidad (Toca para ampliar)", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  const SizedBox(height: 10),
+                  GestureDetector(
+                    onTap: () => _mostrarImagenGrande(reportes['plot']),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(reportes['plot'], fit: BoxFit.cover),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+                if (reportes['frame'] != null) ...[
+                  const Text("📸 Máxima concentración (Toca para ampliar)", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  const SizedBox(height: 10),
+                  GestureDetector(
+                    onTap: () => _mostrarImagenGrande(reportes['frame']),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(reportes['frame'], fit: BoxFit.cover),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+                if (reportes['video'] != null) ...[
+                  const Text("🎥 Video Procesado", style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  // AQUÍ INCRUSTAMOS EL REPRODUCTOR
+                  ReproductorVideo(urlVideo: reportes['video']),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("CERRAR", style: TextStyle(color: usfqRed, fontWeight: FontWeight.bold)),
+            )
+          ],
+        );
+      },
+    );
+  }
+}
+
+// ==================== WIDGET: REPRODUCTOR DE VIDEO ====================
+class ReproductorVideo extends StatefulWidget {
+  final String urlVideo;
+
+  const ReproductorVideo({super.key, required this.urlVideo});
+
+  @override
+  State<ReproductorVideo> createState() => _ReproductorVideoState();
+}
+
+class _ReproductorVideoState extends State<ReproductorVideo> {
+  late VideoPlayerController _controller;
+  bool _isInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Inicializamos el video apuntando a tu URL de Django
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.urlVideo))
+      ..initialize().then((_) {
+        setState(() {
+          _isInitialized = true;
+        });
+      }).catchError((error) {
+        print("Error cargando video: $error");
+      });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isInitialized) {
+      return const SizedBox(
+        height: 150,
+        child: Center(child: CircularProgressIndicator(color: Colors.greenAccent)),
+      );
+    }
+
+    return Column(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: AspectRatio(
+            aspectRatio: _controller.value.aspectRatio,
+            child: VideoPlayer(_controller),
+          ),
+        ),
+        const SizedBox(height: 5),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconButton(
+              icon: Icon(
+                _controller.value.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                color: Colors.white,
+                size: 40,
+              ),
+              onPressed: () {
+                setState(() {
+                  _controller.value.isPlaying ? _controller.pause() : _controller.play();
+                });
+              },
+            ),
+          ],
+        )
+      ],
     );
   }
 }
