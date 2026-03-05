@@ -3,15 +3,10 @@ import 'package:http/http.dart' as http;
 import 'api_service.dart';
 
 class AuthService {
-  // USAMOS LA IP CORRECTA (.103) PARA TODO EL SERVICIO
-  final String baseUrl = "http://172.16.150.27:8001/api";
-
-// En auth_service.dart
-
-// En auth_service.dart
+  final String baseUrl = "http://10.127.8.27:8000/api";
 
 Future<bool> login(String email, String password) async {
-  final url = Uri.parse("http://172.16.150.27:8001/api/auth/login/"); 
+  final url = Uri.parse("http://10.127.8.27:8000/api/auth/login/"); 
   
   try {
     final response = await http.post(
@@ -61,7 +56,7 @@ Future<bool> register(String email, String password, String nombre, String rol) 
   Future<void> wakeUpCameras() async {
     try {
       // Ajustado a la ruta que suele manejar Django fuera del prefijo /api/
-      final url = Uri.parse('http://172.16.150.27:8001/camaras/start_cameras/');
+      final url = Uri.parse('http://10.127.8.27:8000/camaras/start_cameras/');
       await http.get(url).timeout(const Duration(seconds: 5));
     } catch (e) {
       print("Error activando YOLO: $e");

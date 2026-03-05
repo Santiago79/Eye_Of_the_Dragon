@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:io';
 import 'dart:convert';
 import 'package:path/path.dart' as p;
-import 'package:video_player/video_player.dart'; // <--- El nuevo reproductor nativo
+import 'package:video_player/video_player.dart';
 import '../services/api_service.dart';
 
 class AnalisisPage extends StatefulWidget {
@@ -53,7 +53,7 @@ class _AnalisisPageState extends State<AnalisisPage> {
 
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse("$baseUrl/cvpack/api/video-analysis/")
+        Uri.parse("$baseUrl/cvpack/api/video-analysis/start/")
       );
 
       if (token != null) {
@@ -92,7 +92,7 @@ class _AnalisisPageState extends State<AnalisisPage> {
       String baseUrl = ApiService().baseUrl;
 
       final response = await http.get(
-        Uri.parse("$baseUrl/cvpack/api/status/"),
+        Uri.parse("$baseUrl/cvpack/api/video-analysis/status/"),
         headers: token != null ? {'Authorization': 'Bearer $token'} : {},
       );
 
@@ -274,6 +274,28 @@ class _AnalisisPageState extends State<AnalisisPage> {
 
   // ==================== POPUP DE RESULTADOS ====================
   void _mostrarResultados(Map<String, dynamic> reportes) {
+    String baseUrl = ApiService().baseUrl;
+
+    // Helper para armar la URL completa y limpiar el "file://"
+    String fixUrl(String? path) {
+      if (path == null || path.isEmpty) return "";
+      if (path.startsWith('http')) return path;
+      
+      // 1. Limpiamos el texto problemático "file://"
+      path = path.replaceAll('file://', '');
+      
+      // 2. Aseguramos que tenga el formato web correcto
+      if (!path.startsWith('/')) path = '/$path';
+      if (!path.startsWith('/media')) path = '/media$path'; 
+      
+      return "$baseUrl$path";
+    }
+
+    // Convertimos las rutas relativas en URLs absolutas
+    String plotUrl = fixUrl(reportes['plot']);
+    String frameUrl = fixUrl(reportes['frame']);
+    String videoUrl = fixUrl(reportes['video']);
+
     showDialog(
       context: context,
       builder: (context) {
@@ -290,10 +312,10 @@ class _AnalisisPageState extends State<AnalisisPage> {
                   const Text("📊 Gráfica de Densidad (Toca para ampliar)", style: TextStyle(color: Colors.white70, fontSize: 12)),
                   const SizedBox(height: 10),
                   GestureDetector(
-                    onTap: () => _mostrarImagenGrande(reportes['plot']),
+                    onTap: () => _mostrarImagenGrande(plotUrl),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(reportes['plot'], fit: BoxFit.cover),
+                      child: Image.network(plotUrl, fit: BoxFit.cover),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -302,10 +324,10 @@ class _AnalisisPageState extends State<AnalisisPage> {
                   const Text("📸 Máxima concentración (Toca para ampliar)", style: TextStyle(color: Colors.white70, fontSize: 12)),
                   const SizedBox(height: 10),
                   GestureDetector(
-                    onTap: () => _mostrarImagenGrande(reportes['frame']),
+                    onTap: () => _mostrarImagenGrande(frameUrl),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(reportes['frame'], fit: BoxFit.cover),
+                      child: Image.network(frameUrl, fit: BoxFit.cover),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -314,7 +336,7 @@ class _AnalisisPageState extends State<AnalisisPage> {
                   const Text("🎥 Video Procesado", style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 10),
                   // AQUÍ INCRUSTAMOS EL REPRODUCTOR
-                  ReproductorVideo(urlVideo: reportes['video']),
+                  ReproductorVideo(urlVideo: videoUrl),
                 ],
               ],
             ),
@@ -348,7 +370,7 @@ class _ReproductorVideoState extends State<ReproductorVideo> {
   @override
   void initState() {
     super.initState();
-    // Inicializamos el video apuntando a tu URL de Django
+    // Inicializamos el video apuntando a tu URL de Django arreglada
     _controller = VideoPlayerController.networkUrl(Uri.parse(widget.urlVideo))
       ..initialize().then((_) {
         setState(() {
