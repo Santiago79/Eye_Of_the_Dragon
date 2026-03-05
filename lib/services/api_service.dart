@@ -164,48 +164,54 @@ class ApiService {
   }
 
   // ---------------------------------------------------------
-  // ENDPOINTS DEL MAPA EN TIEMPO REAL
+  // ENDPOINTS DEL MAPA (App 'mapas' - API)
   // ---------------------------------------------------------
 
-  // 1. Obtener la simulación de puntos en el campus
+  // 1. Obtener nodos simulados
   Future<Map<String, dynamic>> getMapNodes() async {
+    // NUEVA URL: Agregamos "/api/" para usar el endpoint JWT
     final url = Uri.parse('$_baseUrl/mapas/api/nodes_snapshot/');
+    
     final response = await http.get(url, headers: _getHeaders());
 
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
-      throw Exception('Error cargando los nodos del mapa: ${response.statusCode}');
+      throw Exception('Error al obtener nodos del mapa: ${response.statusCode}');
     }
   }
 
-  // 2. Obtener las ubicaciones reales de los usuarios/guardias
+  // 2. Obtener usuarios reales (Guardias, etc.)
   Future<Map<String, dynamic>> getUsersLocations() async {
-    final url = Uri.parse('$_baseUrl/mapas/users_snapshot/');
+    // NUEVA URL: Agregamos "/api/" para usar el endpoint JWT
+    final url = Uri.parse('$_baseUrl/mapas/api/users_snapshot/');
+    
     final response = await http.get(url, headers: _getHeaders());
 
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
-      throw Exception('Error cargando usuarios: ${response.statusCode}');
+      throw Exception('Error al obtener ubicaciones de usuarios: ${response.statusCode}');
     }
   }
 
-  // 3. Enviar mi ubicación GPS real al servidor
+  // 3. Enviar mi propia ubicación GPS al servidor
   Future<void> updateLocation(double lat, double lon, double accuracy) async {
-    final url = Uri.parse('$_baseUrl/mapas/update-location/');
+    // NUEVA URL: Agregamos "/api/" para usar el endpoint JWT
+    final url = Uri.parse('$_baseUrl/mapas/api/update_my_location/');
+    
     final response = await http.post(
       url,
       headers: _getHeaders(),
       body: json.encode({
         "lat": lat,
         "lon": lon,
-        "accuracy": accuracy,
+        "accuracy": accuracy
       }),
     );
 
     if (response.statusCode != 200) {
-      throw Exception('Error actualizando ubicación: ${response.body}');
+      throw Exception('Error al actualizar ubicación: ${response.body}');
     }
   }
 }
