@@ -4,7 +4,7 @@ import '../models/camera_model.dart'; // Ajusta la ruta si es necesario
 
 class ApiService {
   // IP centralizada para todo el servicio
-  final String _baseUrl = "http://172.16.150.27:8001";
+  final String _baseUrl = "http://10.127.8.27:8000";
   String get baseUrl => _baseUrl; 
   
   // Variable estática para mantener la sesión viva
@@ -100,6 +100,112 @@ class ApiService {
       }
     } catch (e) {
       print("Error al iniciar análisis: $e");
+    }
+  }
+
+  // ---------------------------------------------------------
+  // ENDPOINTS DE ANÁLISIS DE VIDEO (DRF API)
+  // ---------------------------------------------------------
+
+  // 1. Iniciar un análisis subiendo archivos
+  Future<Map<String, dynamic>> uploadVideoForAnalysis({
+    required List<String> filePaths,
+    required double startTime,
+    required double endTime,
+    required int threshold,
+    List<Map<String, dynamic>> areas = const [],
+  }) async {
+    // Apuntamos a la nueva ruta correcta que configuramos en Django
+    final url = Uri.parse('$_baseUrl/cvpack/api/video-analysis/start/');
+    
+    var request = http.MultipartRequest('POST', url);
+
+    // Añadimos el token JWT
+    if (_token != null) {
+      request.headers['Authorization'] = 'Bearer $_token';
+    }
+
+    // Añadimos los datos de configuración
+    request.fields['start_time'] = startTime.toString();
+    request.fields['end_time'] = endTime.toString();
+    request.fields['people_threshold'] = threshold.toString();
+    request.fields['areas'] = json.encode(areas); // Django espera un string JSON
+
+    // Adjuntamos los archivos físicos
+    for (String path in filePaths) {
+      request.files.add(await http.MultipartFile.fromPath('video_files', path));
+    }
+
+    // Enviamos la petición
+    var streamedResponse = await request.send();
+    var response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      print("Error del backend: ${response.body}");
+      throw Exception('Falló al subir los videos: ${response.statusCode}');
+    }
+  }
+
+  // 2. Consultar el estado de los hilos de análisis
+  Future<List<dynamic>> getAnalysisStatus() async {
+    // Apuntamos a la nueva ruta correcta de status
+    final url = Uri.parse('$_baseUrl/cvpack/api/video-analysis/status/');
+    
+    final response = await http.get(url, headers: _getHeaders());
+
+    if (response.statusCode == 200) {
+      final decodedData = json.decode(response.body);
+      return decodedData['threads'] ?? [];
+    } else {
+      throw Exception('Error al obtener estado de análisis: ${response.statusCode}');
+    }
+  }
+
+  // ---------------------------------------------------------
+  // ENDPOINTS DEL MAPA EN TIEMPO REAL
+  // ---------------------------------------------------------
+
+  // 1. Obtener la simulación de puntos en el campus
+  Future<Map<String, dynamic>> getMapNodes() async {
+    final url = Uri.parse('$_baseUrl/mapas/api/nodes_snapshot/');
+    final response = await http.get(url, headers: _getHeaders());
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('Error cargando los nodos del mapa: ${response.statusCode}');
+    }
+  }
+
+  // 2. Obtener las ubicaciones reales de los usuarios/guardias
+  Future<Map<String, dynamic>> getUsersLocations() async {
+    final url = Uri.parse('$_baseUrl/mapas/users_snapshot/');
+    final response = await http.get(url, headers: _getHeaders());
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('Error cargando usuarios: ${response.statusCode}');
+    }
+  }
+
+  // 3. Enviar mi ubicación GPS real al servidor
+  Future<void> updateLocation(double lat, double lon, double accuracy) async {
+    final url = Uri.parse('$_baseUrl/mapas/update-location/');
+    final response = await http.post(
+      url,
+      headers: _getHeaders(),
+      body: json.encode({
+        "lat": lat,
+        "lon": lon,
+        "accuracy": accuracy,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Error actualizando ubicación: ${response.body}');
     }
   }
 }
