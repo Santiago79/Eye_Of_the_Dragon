@@ -25,10 +25,12 @@ class _CamerasPageState extends State<CamerasPage> {
   bool isLoading = true;
   Timer? _refreshTimer;
 
-  @override
+@override
   void initState() {
     super.initState();
     _fetchCameras();
+    
+    _refreshTimer?.cancel(); // <--- MATA CUALQUIER CLON PREVIO
     _refreshTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
       _updateDensities();
     });
@@ -160,22 +162,30 @@ class _CamerasPageState extends State<CamerasPage> {
   // DISEÑO 1: GRIDVIEW (Para Vertical y Múltiples Cámaras)
   // =========================================================
   Widget _buildGridView(bool isPortrait) {
-    // 1 columna en vertical, 2 columnas en horizontal
     int crossAxisCount = isPortrait ? 1 : 2;
 
-    return GridView.builder(
-      padding: const EdgeInsets.all(15),
-      itemCount: camerasToShow,
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
-        crossAxisSpacing: 15,
-        mainAxisSpacing: 15,
-        // Eliminamos el childAspectRatio fijo para evitar estiramientos.
-        // Ahora usamos mainAxisExtent para darle una altura fija basada en el contenido.
-        mainAxisExtent: 380, // Altura suficiente para Video (16:9) + Gráfica + Slider
-      ),
-      itemBuilder: (context, index) => _buildCameraCard(allCameras[index]),
-    );
+    if (crossAxisCount == 1) {
+      // SOLUCIÓN TABLET: Una lista normal que se expande sin límites de altura
+      return ListView.separated(
+        padding: const EdgeInsets.all(15),
+        itemCount: camerasToShow,
+        separatorBuilder: (context, index) => const SizedBox(height: 20),
+        itemBuilder: (context, index) => _buildCameraCard(allCameras[index]),
+      );
+    } else {
+      // Si el celular está acostado (2 columnas), mantenemos el GridView
+      return GridView.builder(
+        padding: const EdgeInsets.all(15),
+        itemCount: camerasToShow,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 15,
+          mainAxisSpacing: 15,
+          mainAxisExtent: 420, // Le damos un poquito más de respiro al diseño horizontal
+        ),
+        itemBuilder: (context, index) => _buildCameraCard(allCameras[index]),
+      );
+    }
   }
 
   // Tarjeta individual para el GridView
@@ -204,7 +214,7 @@ class _CamerasPageState extends State<CamerasPage> {
               child: AspectRatio(
                 aspectRatio: 16 / 9,
                 child: isActive 
-                  ? MjpegPlayer(url: "${ApiService().baseUrl}/camaras/$camId/live_feed/", fit: BoxFit.contain)
+                  ? MjpegPlayer(key: ValueKey(camId),url: "${ApiService().baseUrl}/camaras/$camId/live_feed/", fit: BoxFit.contain)
                   : const Icon(Icons.videocam_off, color: Colors.white24, size: 40),
               ),
             ),
@@ -256,7 +266,7 @@ class _CamerasPageState extends State<CamerasPage> {
                   child: AspectRatio(
                     aspectRatio: 16 / 9,
                     child: isActive 
-                      ? MjpegPlayer(url: "${ApiService().baseUrl}/camaras/$camId/live_feed/", fit: BoxFit.contain)
+                      ? MjpegPlayer(key: ValueKey(camId), url: "${ApiService().baseUrl}/camaras/$camId/live_feed/", fit: BoxFit.contain)
                       : const Icon(Icons.videocam_off, color: Colors.white24, size: 40),
                   ),
                 ),
@@ -474,7 +484,7 @@ class _CamerasPageState extends State<CamerasPage> {
                             child: isActive 
                               ? AspectRatio(
                                   aspectRatio: 16 / 9,
-                                  child: MjpegPlayer(url: "${ApiService().baseUrl}/camaras/$camId/live_feed/", fit: BoxFit.contain),
+                                  child: MjpegPlayer(key: ValueKey(camId),url: "${ApiService().baseUrl}/camaras/$camId/live_feed/", fit: BoxFit.contain),
                                 )
                               : const Icon(Icons.videocam_off, color: Colors.white24, size: 60),
                           ),
