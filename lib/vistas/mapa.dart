@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:geolocator/geolocator.dart'; // <--- Importamos Geolocator
+import 'package:geolocator/geolocator.dart';
 import '../globals.dart';
 import '../services/api_service.dart';
 
@@ -20,16 +20,28 @@ class _MapaPageState extends State<MapaPage> {
   static const LatLng centroUSFQ = LatLng(-0.1973, -78.4355);
   static const Color usfqRed = Color(0xFFDC3545);
   static const Color bgColor = Color(0xFF1E1E2F);
+  static const Color cardColor = Color(0xFF232335); // Color para el panel de filtros
 
   List<dynamic> _simulatedNodes = [];
   List<dynamic> _realUsers = [];
   Timer? _timer;
   
-  // Controlador del mapa para mover la cámara al centrar GPS
   final MapController _mapController = MapController();
   bool _isLocating = false;
 
-@override
+  // =======================================================
+  // NUEVO: ESTADO DE LOS FILTROS
+  // =======================================================
+  final Map<String, bool> _filtrosActivos = {
+    'estudiante': true,
+    'profesor': true,
+    'personal administrativo': true,
+    'personal de limpieza': true,
+    'seguridad': true,
+    'desconocido': true,
+  };
+
+  @override
   void initState() {
     super.initState();
     _fetchMapData();
@@ -37,20 +49,14 @@ class _MapaPageState extends State<MapaPage> {
       _fetchMapData();
     });
 
-    // --- NUEVO: El mapa escucha el walkie-talkie ---
     sosLocationNotifier.addListener(_volarHaciaSOS);
   }
 
-  // Cuando detecta una señal, mueve la cámara
   void _volarHaciaSOS() {
     final latlng = sosLocationNotifier.value;
     if (latlng != null) {
-      // Movemos la cámara al SOS con zoom súper de cerca (19.5)
       _mapController.move(latlng, 19.5);
-      
-      // Limpiamos el notificador para futuros SOS
       sosLocationNotifier.value = null; 
-      
       _showSnack("📍 Mostrando ubicación de emergencia", isSuccess: true);
     }
   }
@@ -58,7 +64,7 @@ class _MapaPageState extends State<MapaPage> {
   @override
   void dispose() {
     _timer?.cancel();
-    sosLocationNotifier.removeListener(_volarHaciaSOS); // Dejamos de escuchar
+    sosLocationNotifier.removeListener(_volarHaciaSOS); 
     super.dispose();
   }
 
@@ -68,14 +74,11 @@ class _MapaPageState extends State<MapaPage> {
       final usersData = await apiService.getUsersLocations();
 
       setState(() {
-        // Parseo seguro: a veces Django manda un Dict {"nodes": [...]}, a veces un array directo [...]
         if (simData.containsKey('nodes')) {
           _simulatedNodes = simData['nodes'];
         } else {
-          // Si el JSON base es la lista misma (o el snapshot root)
           _simulatedNodes = simData['points'] ?? simData['nodos'] ?? [];
         }
-        
         _realUsers = usersData['users'] ?? [];
       });
     } catch (e) {
@@ -83,13 +86,9 @@ class _MapaPageState extends State<MapaPage> {
     }
   }
 
-  // =======================================================
-  // LÓGICA DE GEOLOCALIZACIÓN Y PERMISOS
-  // =======================================================
   Future<void> _enviarMiUbicacion() async {
     setState(() => _isLocating = true);
     try {
-      // 1. Verificar si el servicio GPS del celular está encendido
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         _showSnack("Por favor, enciende el GPS de tu celular.");
@@ -97,7 +96,6 @@ class _MapaPageState extends State<MapaPage> {
         return;
       }
 
-      // 2. Pedir permisos al usuario (Geoconsent)
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -114,15 +112,12 @@ class _MapaPageState extends State<MapaPage> {
         return;
       }
 
-      // 3. Obtener ubicación de alta precisión
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high
       );
 
-      // 4. Centrar el mapa en mi ubicación
       _mapController.move(LatLng(position.latitude, position.longitude), 18.5);
 
-      // 5. Enviar a Django
       await apiService.updateLocation(
         position.latitude, 
         position.longitude, 
@@ -130,8 +125,6 @@ class _MapaPageState extends State<MapaPage> {
       );
       
       _showSnack("📍 Ubicación actualizada en el sistema", isSuccess: true);
-      
-      // Forzamos una actualización visual para vernos a nosotros mismos
       _fetchMapData();
 
     } catch (e) {
@@ -150,8 +143,55 @@ class _MapaPageState extends State<MapaPage> {
   }
 
   // =======================================================
-  // DIBUJADO DE LA INTERFAZ
+  // NUEVO: PANEL DESLIZANTE DE FILTROS
   // =======================================================
+  void _mostrarMenuFiltros() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: cardColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        // StatefulBuilder permite actualizar los checkboxes sin cerrar el panel
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Container(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Filtros del Mapa", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 15),
+                  ..._filtrosActivos.keys.map((String categoria) {
+                    return CheckboxListTile(
+                      title: Text(
+                        categoria.toUpperCase(), 
+                        style: const TextStyle(color: Colors.white70, fontSize: 14)
+                      ),
+                      activeColor: _getColorForCategory(categoria),
+                      checkColor: Colors.white,
+                      value: _filtrosActivos[categoria],
+                      onChanged: (bool? value) {
+                        // 1. Actualizamos el switch visual en el panel
+                        setModalState(() {
+                          _filtrosActivos[categoria] = value ?? true;
+                        });
+                        // 2. Actualizamos el mapa en el fondo
+                        setState(() {});
+                      },
+                    );
+                  }),
+                ],
+              ),
+            );
+          }
+        );
+      }
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -167,47 +207,67 @@ class _MapaPageState extends State<MapaPage> {
           ],
         ),
       ),
-      body: FlutterMap(
-        mapController: _mapController,
-        options: const MapOptions(
-          initialCenter: centroUSFQ,
-          initialZoom: 18.0,
-        ),
+      // Usamos un Stack para poner los botones flotantes en las esquinas inferiores
+      body: Stack(
         children: [
-          TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.app_movil_cam_maps.usfq',
-            tileBuilder: (context, tileWidget, tile) {
-              return ColorFiltered(
-                colorFilter: const ColorFilter.matrix([
-                  -0.21, -0.72, -0.07, 0, 255,
-                  -0.21, -0.72, -0.07, 0, 255,
-                  -0.21, -0.72, -0.07, 0, 255,
-                  0, 0, 0, 1, 0,
-                ]),
-                child: tileWidget,
-              );
-            },
+          FlutterMap(
+            mapController: _mapController,
+            options: const MapOptions(
+              initialCenter: centroUSFQ,
+              initialZoom: 18.0,
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.app_movil_cam_maps.usfq',
+                tileBuilder: (context, tileWidget, tile) {
+                  return ColorFiltered(
+                    colorFilter: const ColorFilter.matrix([
+                      -0.21, -0.72, -0.07, 0, 255,
+                      -0.21, -0.72, -0.07, 0, 255,
+                      -0.21, -0.72, -0.07, 0, 255,
+                      0, 0, 0, 1, 0,
+                    ]),
+                    child: tileWidget,
+                  );
+                },
+              ),
+              MarkerLayer(
+                markers: _buildMarkers(),
+              ),
+            ],
           ),
-          MarkerLayer(
-            markers: _buildMarkers(),
+          
+          // NUEVO: BOTÓN DE FILTROS (Izquierda)
+          Positioned(
+            bottom: 20,
+            left: 20,
+            child: FloatingActionButton(
+              heroTag: "btn_filtros",
+              backgroundColor: cardColor,
+              onPressed: _mostrarMenuFiltros,
+              child: const Icon(Icons.filter_list, color: Colors.white, size: 24),
+            ),
+          ),
+
+          // BOTÓN DE UBICACIÓN (Derecha)
+          Positioned(
+            bottom: 20,
+            right: 20,
+            child: FloatingActionButton(
+              heroTag: "btn_loc",
+              backgroundColor: usfqRed,
+              onPressed: _isLocating ? null : _enviarMiUbicacion,
+              child: _isLocating 
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Icon(Icons.my_location, color: Colors.white, size: 24),
+            ),
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        mini: false,
-        backgroundColor: usfqRed,
-        onPressed: _isLocating ? null : _enviarMiUbicacion,
-        child: _isLocating 
-          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-          : const Icon(Icons.my_location, color: Colors.white, size: 24),
       ),
     );
   }
 
-  // =======================================================
-  // ASIGNACIÓN DE COLORES SEGÚN LA WEB
-  // =======================================================
   Color _getColorForCategory(String category) {
     switch (category.toLowerCase()) {
       case 'estudiante': return Colors.blue;
@@ -224,27 +284,30 @@ class _MapaPageState extends State<MapaPage> {
 
     // 1. Dibujar los Nodos Simulados 
     for (var node in _simulatedNodes) {
-      // Intentamos extraer lat y lon de forma segura
       double? lat = double.tryParse(node['lat']?.toString() ?? '');
       double? lon = double.tryParse(node['lon']?.toString() ?? '');
       
       if (lat != null && lon != null) {
-        String categoria = node['categoria'] ?? 'desconocido';
-        Color nodeColor = _getColorForCategory(categoria);
+        String categoria = (node['categoria'] ?? 'desconocido').toString().toLowerCase();
+        
+        // REVISIÓN DEL FILTRO: Solo dibujamos si la categoría está activa
+        if (_filtrosActivos[categoria] == true || (_filtrosActivos.containsKey(categoria) == false && _filtrosActivos['desconocido'] == true)) {
+          Color nodeColor = _getColorForCategory(categoria);
 
-        markers.add(
-          Marker(
-            point: LatLng(lat, lon),
-            width: 10,
-            height: 10,
-            child: Container(
-              decoration: BoxDecoration(
-                color: nodeColor,
-                shape: BoxShape.circle,
+          markers.add(
+            Marker(
+              point: LatLng(lat, lon),
+              width: 10,
+              height: 10,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: nodeColor,
+                  shape: BoxShape.circle,
+                ),
               ),
-            ),
-          )
-        );
+            )
+          );
+        }
       }
     }
 
@@ -254,22 +317,27 @@ class _MapaPageState extends State<MapaPage> {
       double? lon = double.tryParse(user['lon']?.toString() ?? '');
       
       if (lat != null && lon != null) {
-        markers.add(
-          Marker(
-            point: LatLng(lat, lon),
-            width: 40,
-            height: 40,
-            child: GestureDetector(
-              onTap: () {
-                _showSnack("${user['nombre']} - ${user['rol']}", isSuccess: true);
-              },
-              child: const Tooltip(
-                message: "Usuario Real",
-                child: Icon(Icons.person_pin_circle, color: usfqRed, size: 35),
+        String rol = (user['rol'] ?? 'seguridad').toString().toLowerCase();
+
+        // REVISIÓN DEL FILTRO: Los usuarios reales suelen ser 'seguridad' o 'administrador'.
+        if (_filtrosActivos[rol] == true || _filtrosActivos['seguridad'] == true) {
+          markers.add(
+            Marker(
+              point: LatLng(lat, lon),
+              width: 40,
+              height: 40,
+              child: GestureDetector(
+                onTap: () {
+                  _showSnack("${user['nombre']} - ${user['rol']}", isSuccess: true);
+                },
+                child: const Tooltip(
+                  message: "Usuario Real",
+                  child: Icon(Icons.person_pin_circle, color: usfqRed, size: 35),
+                ),
               ),
-            ),
-          )
-        );
+            )
+          );
+        }
       }
     }
 
