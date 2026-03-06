@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../models/camera_model.dart'; // Ajusta la ruta si es necesario
+import '../models/camera_model.dart';
+import 'dart:convert';
 
 class ApiService {
   // IP centralizada para todo el servicio
@@ -212,6 +213,63 @@ class ApiService {
 
     if (response.statusCode != 200) {
       throw Exception('Error al actualizar ubicación: ${response.body}');
+    }
+  }
+
+  // =======================================================
+  // EXTRAER ROL DEL JWT
+  // =======================================================
+  Future<String> getUserRole() async {
+    String? token = await getToken();
+    if (token == null || token.isEmpty) return 'seguridad';
+
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return 'seguridad';
+
+      final payloadStr = parts[1];
+      // Normalizamos el Base64 para que Dart no se queje
+      String normalized = base64.normalize(payloadStr);
+      final String decodedStr = utf8.decode(base64.decode(normalized));
+      final Map<String, dynamic> payloadMap = json.decode(decodedStr);
+
+      return payloadMap['rol'] ?? 'seguridad';
+    } catch (e) {
+      print("Error decodificando JWT: $e");
+      return 'seguridad';
+    }
+  }
+
+  // =======================================================
+  // ALERTAS SOS
+  // =======================================================
+  Future<void> sendSOSAlert(double lat, double lon) async {
+    final url = Uri.parse('$_baseUrl/mapas/api/sos/enviar/');
+    
+    // Asumo que tienes una función _getHeaders() en tu clase
+    // Si la tuya no usa 'await', quítale el await de abajo
+    final response = await http.post(
+      url,
+      headers: await _getHeaders(), 
+      body: json.encode({"lat": lat, "lon": lon}),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Error al enviar SOS: ${response.body}');
+    }
+  }
+
+  Future<List<dynamic>> getSOSAlerts() async {
+    final url = Uri.parse('$_baseUrl/mapas/api/sos/listar/');
+    
+    // Igual aquí, ajusta el _getHeaders() según cómo lo tengas
+    final response = await http.get(url, headers: await _getHeaders());
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      return data['alertas'] ?? [];
+    } else {
+      throw Exception('Error al obtener alertas: ${response.body}');
     }
   }
 }
