@@ -1,9 +1,11 @@
-// lib/pages/alertas_page.dart
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 
 class AlertasPage extends StatefulWidget {
-  const AlertasPage({super.key});
+  // Recibimos esta función desde el HomePage para poder cambiar la pestaña
+  final Function(double lat, double lon) onGoToMap;
+
+  const AlertasPage({super.key, required this.onGoToMap});
 
   @override
   State<AlertasPage> createState() => _AlertasPageState();
@@ -36,10 +38,10 @@ class _AlertasPageState extends State<AlertasPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF161625),
       appBar: AppBar(
-        title: const Text("Bandeja de Emergencias"), 
+        title: const Text("Bandeja de Emergencias", style: TextStyle(color: Colors.white)), 
         backgroundColor: const Color(0xFFDC3545),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _cargarAlertas)
+          IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _cargarAlertas)
         ],
       ),
       body: _isLoading
@@ -58,10 +60,13 @@ class _AlertasPageState extends State<AlertasPage> {
                         leading: const Icon(Icons.warning, color: Colors.red, size: 40),
                         title: Text("SOS: ${alerta['emisor']}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                         subtitle: Text("Hora: ${alerta['fecha']}\nLat: ${alerta['lat']}, Lon: ${alerta['lon']}", style: const TextStyle(color: Colors.white70)),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.map, color: Colors.blueAccent),
+                        trailing: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                          icon: const Icon(Icons.map, color: Colors.white, size: 18),
+                          label: const Text("MAPA", style: TextStyle(color: Colors.white)),
                           onPressed: () {
-                            // Aquí en el futuro podrías hacer que al tocarlo te lleve al mapa centrado en esa lat/lon
+                            // Llamamos a la función que nos pasó el HomePage
+                            widget.onGoToMap(alerta['lat'], alerta['lon']);
                           },
                         ),
                       ),

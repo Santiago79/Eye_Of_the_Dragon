@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart'; // <--- Importamos Geolocator
+import '../globals.dart';
 import '../services/api_service.dart';
 
 class MapaPage extends StatefulWidget {
@@ -28,19 +29,36 @@ class _MapaPageState extends State<MapaPage> {
   final MapController _mapController = MapController();
   bool _isLocating = false;
 
-  @override
+@override
   void initState() {
     super.initState();
     _fetchMapData();
-    // Radar: Pide datos al servidor cada 2 segundos
     _timer = Timer.periodic(const Duration(seconds: 2), (timer) {
       _fetchMapData();
     });
+
+    // --- NUEVO: El mapa escucha el walkie-talkie ---
+    sosLocationNotifier.addListener(_volarHaciaSOS);
+  }
+
+  // Cuando detecta una señal, mueve la cámara
+  void _volarHaciaSOS() {
+    final latlng = sosLocationNotifier.value;
+    if (latlng != null) {
+      // Movemos la cámara al SOS con zoom súper de cerca (19.5)
+      _mapController.move(latlng, 19.5);
+      
+      // Limpiamos el notificador para futuros SOS
+      sosLocationNotifier.value = null; 
+      
+      _showSnack("📍 Mostrando ubicación de emergencia", isSuccess: true);
+    }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    sosLocationNotifier.removeListener(_volarHaciaSOS); // Dejamos de escuchar
     super.dispose();
   }
 
