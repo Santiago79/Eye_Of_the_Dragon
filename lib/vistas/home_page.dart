@@ -3,6 +3,7 @@ import '../services/api_service.dart';
 import 'dart:async';               // Para el Timer
 import 'package:latlong2/latlong.dart'; // Para las coordenadas
 import '../globals.dart';          // Nuestro walkie-talkie
+import 'package:geolocator/geolocator.dart'; // <-- OBLIGATORIO PARA EL GPS
 
 // Importa tus pantallas
 import 'mapa.dart'; // O el nombre correcto de tu archivo de mapa
@@ -25,6 +26,7 @@ class _HomePageState extends State<HomePage> {
 
   // --- NUEVAS VARIABLES PARA EL RADAR ---
   Timer? _sosTimer;
+  Timer? _rastreadorGlobalTimer; // <-- NUEVA VARIABLE PARA EL GPS
   int _cantidadAlertasAnterior = 0;
 
   @override
@@ -44,24 +46,66 @@ class _HomePageState extends State<HomePage> {
     if (_rol == 'administrador') {
       _iniciarRadarSOS();
     }
+    _iniciarRastreadorGlobal();
   }
 
+  bool _esPrimerEscaneo = true;
+
   void _iniciarRadarSOS() {
+    _sosTimer?.cancel(); // <--- SEGURO DE VIDA
     _sosTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
       try {
         final alertas = await ApiService().getSOSAlerts();
-        
-        // Si hay más alertas ahora que la última vez que revisamos... ¡NUEVO SOS!
-        if (alertas.length > _cantidadAlertasAnterior && _cantidadAlertasAnterior != 0) {
-          final nuevaAlerta = alertas.first; // La más reciente
+        if (!_esPrimerEscaneo && alertas.length > _cantidadAlertasAnterior) {
+          final nuevaAlerta = alertas.first;
           _mostrarNotificacion(nuevaAlerta);
         }
-        
         _cantidadAlertasAnterior = alertas.length;
-      } catch (e) {
-        // Ignoramos errores de red silenciosos
-      }
+        _esPrimerEscaneo = false;
+      } catch (e) {}
     });
+  }
+
+  // ===================================================
+  // RASTREADOR GPS GLOBAL (SEGUNDO PLANO)
+  // ===================================================
+  void _iniciarRastreadorGlobal() {
+    _reportarUbicacionSilenciosa();
+    
+    _rastreadorGlobalTimer?.cancel(); // <--- SEGURO DE VIDA
+    _rastreadorGlobalTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
+      _reportarUbicacionSilenciosa();
+    });
+  }
+
+  Future<void> _reportarUbicacionSilenciosa() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      // ¡AQUÍ ESTABA EL ERROR! Faltaba pedir el permiso la primera vez.
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      
+      // Si a pesar de pedirlo lo denegó, nos salimos sin congelar la app
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) return;
+
+      Position pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 5)
+      );
+      
+      await ApiService().updateLocation(pos.latitude, pos.longitude, pos.accuracy);
+    } catch (e) {
+      try {
+        Position? lastPos = await Geolocator.getLastKnownPosition();
+        if (lastPos != null) {
+          await ApiService().updateLocation(lastPos.latitude, lastPos.longitude, lastPos.accuracy);
+        }
+      } catch (_) {}
+    }
   }
 
   void _mostrarNotificacion(Map<String, dynamic> alerta) {
@@ -94,9 +138,10 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  @override
+@override
   void dispose() {
-    _sosTimer?.cancel(); // Apagamos el radar al cerrar la app
+    _sosTimer?.cancel();             // Apagamos el radar del admin
+    _rastreadorGlobalTimer?.cancel();// Apagamos el rastreador GPS
     super.dispose();
   }
   void _onItemTapped(int index) {

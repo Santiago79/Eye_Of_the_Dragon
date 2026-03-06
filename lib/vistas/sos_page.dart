@@ -63,6 +63,7 @@ class _SosPageState extends State<SosPage> {
       backgroundColor: const Color(0xFF161625),
       appBar: AppBar(title: const Text("MODO PATRULLAJE"), backgroundColor: const Color(0xFFDC3545)),
       body: Center(
+        child: SingleChildScrollView( // <--- ¡LA CURA MÁGICA!
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -93,6 +94,7 @@ class _SosPageState extends State<SosPage> {
             const Text("Presiona el botón solo en caso de\nemergencia real o incidente.", textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 16)),
           ],
         ),
+      ),
       ),
     );
   }

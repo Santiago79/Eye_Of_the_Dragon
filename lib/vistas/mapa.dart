@@ -28,6 +28,8 @@ class _MapaPageState extends State<MapaPage> {
   
   final MapController _mapController = MapController();
   bool _isLocating = false;
+  LatLng? _sosPuntoCritico; // Aquí guardaremos dónde fue la emergencia
+  Timer? _sosMarcadorTimer; // Para borrar el marcador después de unos segundos
 
   // =======================================================
   // NUEVO: ESTADO DE LOS FILTROS
@@ -45,17 +47,33 @@ class _MapaPageState extends State<MapaPage> {
   void initState() {
     super.initState();
     _fetchMapData();
+    
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 2), (timer) {
-      _fetchMapData();
+      // Solo pedimos datos a Django si la pantalla del mapa sigue viva en el celular
+      if (mounted) {
+        _fetchMapData();
+      }
     });
 
     sosLocationNotifier.addListener(_volarHaciaSOS);
   }
 
-  void _volarHaciaSOS() {
+ void _volarHaciaSOS() {
     final latlng = sosLocationNotifier.value;
     if (latlng != null) {
       _mapController.move(latlng, 19.5);
+      
+      setState(() {
+        _sosPuntoCritico = latlng; // Guardamos el punto
+      });
+
+      // El marcador rojo desaparecerá automáticamente después de 30 segundos
+      _sosMarcadorTimer?.cancel();
+      _sosMarcadorTimer = Timer(const Duration(seconds: 30), () {
+        if (mounted) setState(() => _sosPuntoCritico = null);
+      });
+
       sosLocationNotifier.value = null; 
       _showSnack("📍 Mostrando ubicación de emergencia", isSuccess: true);
     }
@@ -339,6 +357,20 @@ class _MapaPageState extends State<MapaPage> {
           );
         }
       }
+    }
+
+    // 3. Dibujar el SOS si hay una emergencia activa
+    if (_sosPuntoCritico != null) {
+      markers.add(
+        Marker(
+          point: _sosPuntoCritico!,
+          width: 80, height: 80,
+          child: const Tooltip(
+            message: "¡EMERGENCIA AQUÍ!",
+            child: Icon(Icons.emergency_share, color: Colors.redAccent, size: 60),
+          ),
+        )
+      );
     }
 
     return markers;
