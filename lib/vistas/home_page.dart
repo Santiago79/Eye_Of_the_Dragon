@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import 'dart:async';               // Para el Timer
+import 'package:latlong2/latlong.dart'; // Para las coordenadas
+import '../globals.dart';          // Nuestro walkie-talkie
 
 // Importa tus pantallas
 import 'mapa.dart'; // O el nombre correcto de tu archivo de mapa
@@ -18,7 +21,11 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
   String _rol = "";
-  bool _isLoading = true; // Para esperar a leer el token
+  bool _isLoading = true;
+
+  // --- NUEVAS VARIABLES PARA EL RADAR ---
+  Timer? _sosTimer;
+  int _cantidadAlertasAnterior = 0;
 
   @override
   void initState() {
@@ -26,15 +33,72 @@ class _HomePageState extends State<HomePage> {
     _cargarRol();
   }
 
-  Future<void> _cargarRol() async {
-    // Leemos el rol oculto en el JWT
+ Future<void> _cargarRol() async {
     String rolExtraido = await ApiService().getUserRole();
     setState(() {
       _rol = rolExtraido;
       _isLoading = false;
     });
+
+    // Si es admin, encendemos el radar de notificaciones en tiempo real
+    if (_rol == 'administrador') {
+      _iniciarRadarSOS();
+    }
   }
 
+  void _iniciarRadarSOS() {
+    _sosTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+      try {
+        final alertas = await ApiService().getSOSAlerts();
+        
+        // Si hay más alertas ahora que la última vez que revisamos... ¡NUEVO SOS!
+        if (alertas.length > _cantidadAlertasAnterior && _cantidadAlertasAnterior != 0) {
+          final nuevaAlerta = alertas.first; // La más reciente
+          _mostrarNotificacion(nuevaAlerta);
+        }
+        
+        _cantidadAlertasAnterior = alertas.length;
+      } catch (e) {
+        // Ignoramos errores de red silenciosos
+      }
+    });
+  }
+
+  void _mostrarNotificacion(Map<String, dynamic> alerta) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.red.shade900,
+        duration: const Duration(seconds: 8), // Dura 8 segundos en pantalla
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(20),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        content: Row(
+          children: [
+            const Icon(Icons.emergency, color: Colors.white, size: 30),
+            const SizedBox(width: 10),
+            Expanded(child: Text("🚨 ¡SOS de ${alerta['emisor']}!", style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold))),
+          ],
+        ),
+        action: SnackBarAction(
+          label: "IR AL MAPA",
+          textColor: Colors.white,
+          backgroundColor: Colors.black45,
+          onPressed: () {
+            // 1. Mandamos la señal por el walkie-talkie
+            sosLocationNotifier.value = LatLng(alerta['lat'], alerta['lon']);
+            // 2. Forzamos el cambio al tab del mapa (Índice 1 en el Admin)
+            setState(() => _selectedIndex = 1);
+          },
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _sosTimer?.cancel(); // Apagamos el radar al cerrar la app
+    super.dispose();
+  }
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
@@ -60,7 +124,15 @@ class _HomePageState extends State<HomePage> {
     final List<Widget> pagesAdmin = [
       _buildDashboard(isAdmin),
       const MapaPage(),         // Índice 1
-      const AlertasPage(),      // Índice 2
+      
+      // Le pasamos la función a la bandeja de alertas
+      AlertasPage(
+        onGoToMap: (lat, lon) {
+          sosLocationNotifier.value = LatLng(lat, lon);
+          setState(() => _selectedIndex = 1);
+        },
+      ),      
+      
       const AnalisisPage(),     // Índice 3
       const CamerasPage(),      // Índice 4
     ];
