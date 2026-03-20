@@ -1,13 +1,12 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/camera_model.dart';
-import 'dart:convert';
 
 class ApiService {
   // IP centralizada para todo el servicio
-  final String _baseUrl = "http://10.127.8.27:8000";
-  String get baseUrl => _baseUrl; 
-  
+  final String _baseUrl = "http://10.42.175.164:8000";
+  String get baseUrl => _baseUrl;
+
   // Variable estática para mantener la sesión viva
   static String? _token;
 
@@ -40,7 +39,7 @@ class ApiService {
     if (response.statusCode == 200) {
       final dynamic decodedData = json.decode(response.body);
       List<dynamic> jsonResponse;
-      
+
       // Manejo de paginación de Django REST Framework por si acaso
       if (decodedData is Map && decodedData.containsKey('results')) {
         jsonResponse = decodedData['results'];
@@ -64,7 +63,7 @@ class ApiService {
       headers: _getHeaders(),
       body: json.encode({"people_threshold": newValue.toInt()}),
     );
-    
+
     if (response.statusCode != 200) {
       print('Error al actualizar umbral: ${response.body}');
     }
@@ -91,7 +90,7 @@ class ApiService {
       return {};
     }
   }
-  
+
   Future<void> startAnalysis() async {
     try {
       final url = Uri.parse('$_baseUrl/camaras/start_cameras/');
@@ -118,7 +117,7 @@ class ApiService {
   }) async {
     // Apuntamos a la nueva ruta correcta que configuramos en Django
     final url = Uri.parse('$_baseUrl/cvpack/api/video-analysis/start/');
-    
+
     var request = http.MultipartRequest('POST', url);
 
     // Añadimos el token JWT
@@ -130,7 +129,8 @@ class ApiService {
     request.fields['start_time'] = startTime.toString();
     request.fields['end_time'] = endTime.toString();
     request.fields['people_threshold'] = threshold.toString();
-    request.fields['areas'] = json.encode(areas); // Django espera un string JSON
+    request.fields['areas'] =
+        json.encode(areas); // Django espera un string JSON
 
     // Adjuntamos los archivos físicos
     for (String path in filePaths) {
@@ -153,14 +153,15 @@ class ApiService {
   Future<List<dynamic>> getAnalysisStatus() async {
     // Apuntamos a la nueva ruta correcta de status
     final url = Uri.parse('$_baseUrl/cvpack/api/video-analysis/status/');
-    
+
     final response = await http.get(url, headers: _getHeaders());
 
     if (response.statusCode == 200) {
       final decodedData = json.decode(response.body);
       return decodedData['threads'] ?? [];
     } else {
-      throw Exception('Error al obtener estado de análisis: ${response.statusCode}');
+      throw Exception(
+          'Error al obtener estado de análisis: ${response.statusCode}');
     }
   }
 
@@ -172,13 +173,14 @@ class ApiService {
   Future<Map<String, dynamic>> getMapNodes() async {
     // NUEVA URL: Agregamos "/api/" para usar el endpoint JWT
     final url = Uri.parse('$_baseUrl/mapas/api/nodes_snapshot/');
-    
+
     final response = await http.get(url, headers: _getHeaders());
 
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
-      throw Exception('Error al obtener nodos del mapa: ${response.statusCode}');
+      throw Exception(
+          'Error al obtener nodos del mapa: ${response.statusCode}');
     }
   }
 
@@ -186,13 +188,14 @@ class ApiService {
   Future<Map<String, dynamic>> getUsersLocations() async {
     // NUEVA URL: Agregamos "/api/" para usar el endpoint JWT
     final url = Uri.parse('$_baseUrl/mapas/api/users_snapshot/');
-    
+
     final response = await http.get(url, headers: _getHeaders());
 
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
-      throw Exception('Error al obtener ubicaciones de usuarios: ${response.statusCode}');
+      throw Exception(
+          'Error al obtener ubicaciones de usuarios: ${response.statusCode}');
     }
   }
 
@@ -200,15 +203,11 @@ class ApiService {
   Future<void> updateLocation(double lat, double lon, double accuracy) async {
     // NUEVA URL: Agregamos "/api/" para usar el endpoint JWT
     final url = Uri.parse('$_baseUrl/mapas/api/update_my_location/');
-    
+
     final response = await http.post(
       url,
       headers: _getHeaders(),
-      body: json.encode({
-        "lat": lat,
-        "lon": lon,
-        "accuracy": accuracy
-      }),
+      body: json.encode({"lat": lat, "lon": lon, "accuracy": accuracy}),
     );
 
     if (response.statusCode != 200) {
@@ -245,12 +244,12 @@ class ApiService {
   // =======================================================
   Future<void> sendSOSAlert(double lat, double lon) async {
     final url = Uri.parse('$_baseUrl/mapas/api/sos/enviar/');
-    
+
     // Asumo que tienes una función _getHeaders() en tu clase
     // Si la tuya no usa 'await', quítale el await de abajo
     final response = await http.post(
       url,
-      headers: await _getHeaders(), 
+      headers: await _getHeaders(),
       body: json.encode({"lat": lat, "lon": lon}),
     );
 
@@ -261,7 +260,7 @@ class ApiService {
 
   Future<List<dynamic>> getSOSAlerts() async {
     final url = Uri.parse('$_baseUrl/mapas/api/sos/listar/');
-    
+
     // Igual aquí, ajusta el _getHeaders() según cómo lo tengas
     final response = await http.get(url, headers: await _getHeaders());
 
@@ -270,6 +269,21 @@ class ApiService {
       return data['alertas'] ?? [];
     } else {
       throw Exception('Error al obtener alertas: ${response.body}');
+    }
+  }
+
+  Future<void> markSOSAsAttended(int alertId) async {
+    final url = Uri.parse('$_baseUrl/mapas/api/sos/ack_mobile/$alertId/');
+
+    final response = await http.post(
+      url,
+      headers:
+          _getHeaders(), // Asegúrate de usar la función que inyecta tu Token JWT
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(
+          'Error al marcar la alerta como atendida: ${response.body}');
     }
   }
 }
