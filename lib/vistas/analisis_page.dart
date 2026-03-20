@@ -1,9 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:http/http.dart' as http;
-import 'dart:io';
-import 'dart:convert';
-import 'package:path/path.dart' as p;
 import 'package:video_player/video_player.dart';
 import '../services/api_service.dart';
 
@@ -18,14 +14,20 @@ class _AnalisisPageState extends State<AnalisisPage> {
   static const Color bgColor = Color(0xFF161625);
   static const Color cardColor = Color(0xFF232335);
   static const Color usfqRed = Color(0xFFDC3545);
-  
-  File? _selectedFile;
-  String? fileName;
+
+  // AHORA GUARDAMOS UNA LISTA DE RUTAS Y NOMBRES
+  List<String> _rutasVideosSeleccionados = [];
+  List<String> _nombresVideosSeleccionados = [];
+
   bool _isAnalyzing = false;
   List<dynamic> _activeAnalyses = [];
 
-  final TextEditingController _inicioController = TextEditingController(text: "0");
-  final TextEditingController _finController = TextEditingController(text: "60");
+  final TextEditingController _inicioController =
+      TextEditingController(text: "0");
+  final TextEditingController _finController =
+      TextEditingController(text: "60");
+  final TextEditingController _thresholdController =
+      TextEditingController(text: "5");
 
   @override
   void initState() {
@@ -33,52 +35,52 @@ class _AnalisisPageState extends State<AnalisisPage> {
     _checkStatus();
   }
 
+  // ==========================================
+  // 1. SELECCIONAR MÚLTIPLES VIDEOS
+  // ==========================================
   Future<void> _pickFile() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.video);
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.video,
+      allowMultiple: true, // <--- MAGIA: Permite elegir varios
+    );
+
     if (result != null) {
       setState(() {
-        _selectedFile = File(result.files.first.path!);
-        fileName = result.files.first.name;
+        _rutasVideosSeleccionados = result.paths.whereType<String>().toList();
+        _nombresVideosSeleccionados = result.names.whereType<String>().toList();
       });
     }
   }
 
+  // ==========================================
+  // 2. ENVIAR AL BACKEND (Usando tu ApiService)
+  // ==========================================
   Future<void> _enviarAnalisis() async {
-    if (_selectedFile == null) return;
+    if (_rutasVideosSeleccionados.isEmpty) {
+      _showSnackBar("Por favor, selecciona al menos un video.");
+      return;
+    }
+
     setState(() => _isAnalyzing = true);
 
     try {
-      String? token = await ApiService().getToken(); 
-      String baseUrl = ApiService().baseUrl;
-
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse("$baseUrl/cvpack/api/video-analysis/start/")
+      // Usamos la función que ya tenías lista en tu ApiService
+      await ApiService().uploadVideoForAnalysis(
+        filePaths: _rutasVideosSeleccionados,
+        startTime: double.tryParse(_inicioController.text) ?? 0.0,
+        endTime: double.tryParse(_finController.text) ?? 60.0,
+        threshold: int.tryParse(_thresholdController.text) ?? 5,
       );
 
-      if (token != null) {
-        request.headers['Authorization'] = 'Bearer $token';
-      }
+      _showSnackBar("🚀 Análisis en lote enviado a la cola");
 
-      request.fields['start_time'] = _inicioController.text;
-      request.fields['end_time'] = _finController.text;
-      request.fields['people_threshold'] = "5"; 
-      
-      request.files.add(await http.MultipartFile.fromPath(
-        'video_files', 
-        _selectedFile!.path,
-        filename: p.basename(_selectedFile!.path),
-      ));
+      // Limpiamos el formulario
+      setState(() {
+        _rutasVideosSeleccionados.clear();
+        _nombresVideosSeleccionados.clear();
+      });
 
-      var response = await request.send();
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        _showSnackBar("🚀 Análisis enviado a la cola");
-        _checkStatus();
-      } else {
-        var respStr = await response.stream.bytesToString();
-        _showSnackBar("Error ${response.statusCode}: $respStr");
-      }
+      _checkStatus();
     } catch (e) {
       _showSnackBar("Error de conexión: $e");
     } finally {
@@ -88,18 +90,10 @@ class _AnalisisPageState extends State<AnalisisPage> {
 
   Future<void> _checkStatus() async {
     try {
-      String? token = await ApiService().getToken();
-      String baseUrl = ApiService().baseUrl;
-
-      final response = await http.get(
-        Uri.parse("$baseUrl/cvpack/api/video-analysis/status/"),
-        headers: token != null ? {'Authorization': 'Bearer $token'} : {},
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+      final threads = await ApiService().getAnalysisStatus();
+      if (mounted) {
         setState(() {
-          _activeAnalyses = data['threads'];
+          _activeAnalyses = threads;
         });
       }
     } catch (e) {
@@ -115,7 +109,9 @@ class _AnalisisPageState extends State<AnalisisPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(title: const Text("CVPack - Análisis"), backgroundColor: usfqRed),
+      appBar: AppBar(
+          title: const Text("CVPack - Análisis Batch"),
+          backgroundColor: usfqRed),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -130,24 +126,48 @@ class _AnalisisPageState extends State<AnalisisPage> {
   }
 
   Widget _buildUploadPanel() {
+    String textBoton = _rutasVideosSeleccionados.isEmpty
+        ? "Seleccionar Videos"
+        : "${_rutasVideosSeleccionados.length} video(s) seleccionado(s)";
+
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(
+          color: cardColor, borderRadius: BorderRadius.circular(10)),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ListTile(
-            title: Text(fileName ?? "Seleccionar Video", style: const TextStyle(color: Colors.white)),
-            trailing: const Icon(Icons.attach_file, color: Colors.white),
+            title: Text(textBoton,
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
+            trailing: const Icon(Icons.video_library, color: Colors.white),
             onTap: _pickFile,
             tileColor: Colors.white10,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
+
+          // Muestra la lista de nombres si seleccionó alguno
+          if (_nombresVideosSeleccionados.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 10, left: 5),
+              child: Text(
+                _nombresVideosSeleccionados.join(", "),
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+
           const SizedBox(height: 15),
           Row(
             children: [
               Expanded(child: _timeField("Inicio (s)", _inicioController)),
               const SizedBox(width: 15),
               Expanded(child: _timeField("Fin (s)", _finController)),
+              const SizedBox(width: 15),
+              Expanded(child: _timeField("Umbral", _thresholdController)),
             ],
           ),
           const SizedBox(height: 20),
@@ -156,12 +176,16 @@ class _AnalisisPageState extends State<AnalisisPage> {
             child: ElevatedButton(
               onPressed: _isAnalyzing ? null : _enviarAnalisis,
               style: ElevatedButton.styleFrom(
-                backgroundColor: usfqRed,
-                padding: const EdgeInsets.symmetric(vertical: 15)
-              ),
-              child: _isAnalyzing 
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
-                : const Text("ANALIZAR VIDEO", style: TextStyle(fontWeight: FontWeight.bold)),
+                  backgroundColor: usfqRed,
+                  padding: const EdgeInsets.symmetric(vertical: 15)),
+              child: _isAnalyzing
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2))
+                  : const Text("INICIAR ANÁLISIS MÚLTIPLE",
+                      style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           )
         ],
@@ -173,14 +197,19 @@ class _AnalisisPageState extends State<AnalisisPage> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(
+          color: cardColor, borderRadius: BorderRadius.circular(10)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("Hilos de Análisis", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text("Hilos de Análisis",
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold)),
               IconButton(
                 icon: const Icon(Icons.refresh, color: Colors.white70),
                 onPressed: _checkStatus,
@@ -189,42 +218,55 @@ class _AnalisisPageState extends State<AnalisisPage> {
             ],
           ),
           const SizedBox(height: 15),
-          _activeAnalyses.isEmpty 
-            ? const Text("No hay procesos activos.", style: TextStyle(color: Colors.white38))
-            : ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _activeAnalyses.length,
-                itemBuilder: (context, index) {
-                  final t = _activeAnalyses[index];
-                  bool isFinished = t['status'] == 'finished';
-                  bool isError = t['status'] == 'error';
+          _activeAnalyses.isEmpty
+              ? const Text("No hay procesos activos.",
+                  style: TextStyle(color: Colors.white38))
+              : ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _activeAnalyses.length,
+                  itemBuilder: (context, index) {
+                    final t = _activeAnalyses[index];
+                    bool isFinished = t['status'] == 'finished';
+                    bool isError = t['status'] == 'error';
 
-                  return Card(
-                    color: Colors.white10,
-                    margin: const EdgeInsets.only(bottom: 10),
-                    child: ListTile(
-                      title: Text(t['name'], style: const TextStyle(color: Colors.white, fontSize: 14)),
-                      subtitle: Text("Estado: ${t['status'].toUpperCase()}", 
-                        style: TextStyle(
-                          color: isFinished ? Colors.green : (isError ? Colors.red : Colors.orange),
-                          fontWeight: FontWeight.bold
-                        )
+                    return Card(
+                      color: Colors.white10,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: ListTile(
+                        title: Text(t['name'],
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 14)),
+                        subtitle: Text("Estado: ${t['status'].toUpperCase()}",
+                            style: TextStyle(
+                                color: isFinished
+                                    ? Colors.green
+                                    : (isError ? Colors.red : Colors.orange),
+                                fontWeight: FontWeight.bold)),
+                        trailing: isFinished
+                            ? const Icon(Icons.check_circle,
+                                color: Colors.green)
+                            : (isError
+                                ? const Icon(Icons.error, color: Colors.red)
+                                : const CircularProgressIndicator(
+                                    strokeWidth: 2)),
+                        onTap: isFinished
+                            ? () {
+                                if (t['report_files'] != null &&
+                                    t['report_files'].isNotEmpty) {
+                                  // Abre el popup enviando la lista completa de reportes generados
+                                  _mostrarSelectorDeResultados(
+                                      t['report_files']);
+                                } else {
+                                  _showSnackBar(
+                                      "El reporte aún no está disponible.");
+                                }
+                              }
+                            : null,
                       ),
-                      trailing: isFinished 
-                        ? const Icon(Icons.check_circle, color: Colors.green) 
-                        : (isError ? const Icon(Icons.error, color: Colors.red) : const CircularProgressIndicator(strokeWidth: 2)),
-                      onTap: isFinished ? () {
-                        if (t['report_files'] != null && t['report_files'].isNotEmpty) {
-                          _mostrarResultados(t['report_files'][0]);
-                        } else {
-                          _showSnackBar("El reporte aún no está disponible.");
-                        }
-                      } : null,
-                    ),
-                  );
-                },
-              )
+                    );
+                  },
+                )
         ],
       ),
     );
@@ -236,10 +278,12 @@ class _AnalisisPageState extends State<AnalisisPage> {
       keyboardType: TextInputType.number,
       style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
-        labelText: label, 
+        labelText: label,
         labelStyle: const TextStyle(color: Colors.white60),
-        enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-        focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: usfqRed)),
+        enabledBorder: const UnderlineInputBorder(
+            borderSide: BorderSide(color: Colors.white24)),
+        focusedBorder:
+            const UnderlineInputBorder(borderSide: BorderSide(color: usfqRed)),
       ),
     );
   }
@@ -272,26 +316,68 @@ class _AnalisisPageState extends State<AnalisisPage> {
     );
   }
 
-  // ==================== POPUP DE RESULTADOS ====================
+  // ==================== SELECTOR DE RESULTADOS MULTIPLES ====================
+  void _mostrarSelectorDeResultados(List<dynamic> reportesList) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: cardColor,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Selecciona el reporte a ver:",
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(height: 15),
+              Expanded(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: reportesList.length,
+                  itemBuilder: (context, idx) {
+                    final rep = reportesList[idx];
+                    final bool esResumen = rep['kind'] == 'summary';
+
+                    return ListTile(
+                      leading: Icon(
+                          esResumen ? Icons.bar_chart : Icons.video_file,
+                          color: usfqRed),
+                      title: Text(rep['video_label'] ?? "Video ${idx + 1}",
+                          style: const TextStyle(color: Colors.white)),
+                      onTap: () {
+                        Navigator.pop(context); // Cierra el menú inferior
+                        _mostrarResultados(rep); // Abre el popup de siempre
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ==================== POPUP DE RESULTADOS INDIVIDUALES ====================
   void _mostrarResultados(Map<String, dynamic> reportes) {
     String baseUrl = ApiService().baseUrl;
 
-    // Helper para armar la URL completa y limpiar el "file://"
     String fixUrl(String? path) {
       if (path == null || path.isEmpty) return "";
       if (path.startsWith('http')) return path;
-      
-      // 1. Limpiamos el texto problemático "file://"
       path = path.replaceAll('file://', '');
-      
-      // 2. Aseguramos que tenga el formato web correcto
       if (!path.startsWith('/')) path = '/$path';
-      if (!path.startsWith('/media')) path = '/media$path'; 
-      
+      if (!path.startsWith('/media')) path = '/media$path';
       return "$baseUrl$path";
     }
 
-    // Convertimos las rutas relativas en URLs absolutas
     String plotUrl = fixUrl(reportes['plot']);
     String frameUrl = fixUrl(reportes['frame']);
     String videoUrl = fixUrl(reportes['video']);
@@ -301,41 +387,49 @@ class _AnalisisPageState extends State<AnalisisPage> {
       builder: (context) {
         return AlertDialog(
           backgroundColor: cardColor,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          title: const Text("Resultados del Análisis", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: Text(reportes['video_label'] ?? "Resultados",
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (reportes['plot'] != null) ...[
-                  const Text("📊 Gráfica de Densidad (Toca para ampliar)", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  const Text("📊 Gráfica de Densidad",
+                      style: TextStyle(color: Colors.white70, fontSize: 12)),
                   const SizedBox(height: 10),
                   GestureDetector(
                     onTap: () => _mostrarImagenGrande(plotUrl),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(plotUrl, fit: BoxFit.cover),
-                    ),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(plotUrl, fit: BoxFit.cover)),
                   ),
                   const SizedBox(height: 20),
                 ],
                 if (reportes['frame'] != null) ...[
-                  const Text("📸 Máxima concentración (Toca para ampliar)", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  const Text("📸 Máxima concentración",
+                      style: TextStyle(color: Colors.white70, fontSize: 12)),
                   const SizedBox(height: 10),
                   GestureDetector(
                     onTap: () => _mostrarImagenGrande(frameUrl),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(frameUrl, fit: BoxFit.cover),
-                    ),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(frameUrl, fit: BoxFit.cover)),
                   ),
                   const SizedBox(height: 20),
                 ],
-                if (reportes['video'] != null) ...[
-                  const Text("🎥 Video Procesado", style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                if (reportes['video'] != null && reportes['video'] != "") ...[
+                  const Text("🎥 Video Procesado",
+                      style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold)),
                   const SizedBox(height: 10),
-                  // AQUÍ INCRUSTAMOS EL REPRODUCTOR
                   ReproductorVideo(urlVideo: videoUrl),
                 ],
               ],
@@ -344,7 +438,9 @@ class _AnalisisPageState extends State<AnalisisPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text("CERRAR", style: TextStyle(color: usfqRed, fontWeight: FontWeight.bold)),
+              child: const Text("CERRAR",
+                  style:
+                      TextStyle(color: usfqRed, fontWeight: FontWeight.bold)),
             )
           ],
         );
@@ -370,7 +466,6 @@ class _ReproductorVideoState extends State<ReproductorVideo> {
   @override
   void initState() {
     super.initState();
-    // Inicializamos el video apuntando a tu URL de Django arreglada
     _controller = VideoPlayerController.networkUrl(Uri.parse(widget.urlVideo))
       ..initialize().then((_) {
         setState(() {
@@ -392,7 +487,9 @@ class _ReproductorVideoState extends State<ReproductorVideo> {
     if (!_isInitialized) {
       return const SizedBox(
         height: 150,
-        child: Center(child: CircularProgressIndicator(color: Colors.greenAccent)),
+        child: Center(
+            child:
+                CircularProgressIndicator(color: _AnalisisPageState.usfqRed)),
       );
     }
 
@@ -411,13 +508,17 @@ class _ReproductorVideoState extends State<ReproductorVideo> {
           children: [
             IconButton(
               icon: Icon(
-                _controller.value.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                _controller.value.isPlaying
+                    ? Icons.pause_circle_filled
+                    : Icons.play_circle_fill,
                 color: Colors.white,
                 size: 40,
               ),
               onPressed: () {
                 setState(() {
-                  _controller.value.isPlaying ? _controller.pause() : _controller.play();
+                  _controller.value.isPlaying
+                      ? _controller.pause()
+                      : _controller.play();
                 });
               },
             ),

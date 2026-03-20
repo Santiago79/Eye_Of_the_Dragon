@@ -25,14 +25,16 @@ class _CamerasPageState extends State<CamerasPage> {
   bool isLoading = true;
   Timer? _refreshTimer;
 
-@override
+  @override
   void initState() {
     super.initState();
     _fetchCameras();
     
-    _refreshTimer?.cancel(); // <--- MATA CUALQUIER CLON PREVIO
+    _refreshTimer?.cancel(); // MATA CUALQUIER CLON PREVIO
     _refreshTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      _updateDensities();
+      if (mounted) {
+        _updateDensities();
+      }
     });
   }
 
@@ -58,7 +60,7 @@ class _CamerasPageState extends State<CamerasPage> {
       _updateDensities();
     } catch (e) {
       debugPrint("Error al cargar cámaras: $e");
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
@@ -111,7 +113,6 @@ class _CamerasPageState extends State<CamerasPage> {
           const SizedBox(width: 10),
         ],
       ),
-      // OrientationBuilder nos dice si el teléfono está vertical u horizontal
       body: OrientationBuilder(
         builder: (context, orientation) {
           if (isLoading) {
@@ -128,7 +129,7 @@ class _CamerasPageState extends State<CamerasPage> {
             return _buildLandscapeSingleCamera(allCameras[0]);
           }
 
-          // Si estamos en vertical, o si hay varias cámaras en horizontal, usamos GridView
+          // Si estamos en vertical, o si hay varias cámaras en horizontal, usamos GridView seguro
           return _buildGridView(isPortrait);
         },
       ),
@@ -159,33 +160,24 @@ class _CamerasPageState extends State<CamerasPage> {
   }
 
   // =========================================================
-  // DISEÑO 1: GRIDVIEW (Para Vertical y Múltiples Cámaras)
+  // DISEÑO 1: GRIDVIEW SEGURO (A prueba de colapsos)
   // =========================================================
   Widget _buildGridView(bool isPortrait) {
+    // 1 columna en vertical, 2 en horizontal
     int crossAxisCount = isPortrait ? 1 : 2;
 
-    if (crossAxisCount == 1) {
-      // SOLUCIÓN TABLET: Una lista normal que se expande sin límites de altura
-      return ListView.separated(
-        padding: const EdgeInsets.all(15),
-        itemCount: camerasToShow,
-        separatorBuilder: (context, index) => const SizedBox(height: 20),
-        itemBuilder: (context, index) => _buildCameraCard(allCameras[index]),
-      );
-    } else {
-      // Si el celular está acostado (2 columnas), mantenemos el GridView
-      return GridView.builder(
-        padding: const EdgeInsets.all(15),
-        itemCount: camerasToShow,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 15,
-          mainAxisSpacing: 15,
-          mainAxisExtent: 420, // Le damos un poquito más de respiro al diseño horizontal
-        ),
-        itemBuilder: (context, index) => _buildCameraCard(allCameras[index]),
-      );
-    }
+    return GridView.builder(
+      padding: const EdgeInsets.all(15),
+      itemCount: camerasToShow,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        crossAxisSpacing: 15,
+        mainAxisSpacing: 15,
+        // OBLIGATORIO: Fuerza a la tarjeta a medir exactamente 420px de alto. Evita crasheos.
+        mainAxisExtent: 420, 
+      ),
+      itemBuilder: (context, index) => _buildCameraCard(allCameras[index]),
+    );
   }
 
   // Tarjeta individual para el GridView
@@ -207,19 +199,22 @@ class _CamerasPageState extends State<CamerasPage> {
           children: [
             _buildHeader(cameraData.name.toUpperCase(), isActive, cameraData.peopleCount),
             
-            // EL VIDEO CON ASPECT RATIO 16:9 FORZADO
+            // ========================================================
+            // CURA PARA LA PANTALLA NEGRA: ALTURA FIJA PARA EL VIDEO
+            // ========================================================
             Container(
+              height: 200, // Medida exacta y estricta
               width: double.infinity,
               color: Colors.black,
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: isActive 
-                  ? MjpegPlayer(key: ValueKey(camId),url: "${ApiService().baseUrl}/camaras/$camId/live_feed/", fit: BoxFit.contain)
-                  : const Icon(Icons.videocam_off, color: Colors.white24, size: 40),
-              ),
+              child: isActive 
+                ? MjpegPlayer(
+                    url: "${ApiService().baseUrl}/camaras/$camId/live_feed/", 
+                    fit: BoxFit.contain,
+                  )
+                : const Icon(Icons.videocam_off, color: Colors.white24, size: 40),
             ),
 
-            // LA GRÁFICA Y SLIDER (Se empujan abajo naturalmente)
+            // LA GRÁFICA Y SLIDER (Toman el resto del espacio)
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
@@ -250,7 +245,7 @@ class _CamerasPageState extends State<CamerasPage> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // LADO IZQUIERDO: VIDEO (65% del espacio)
+        // LADO IZQUIERDO: VIDEO
         Expanded(
           flex: 65,
           child: Container(
@@ -266,7 +261,10 @@ class _CamerasPageState extends State<CamerasPage> {
                   child: AspectRatio(
                     aspectRatio: 16 / 9,
                     child: isActive 
-                      ? MjpegPlayer(key: ValueKey(camId), url: "${ApiService().baseUrl}/camaras/$camId/live_feed/", fit: BoxFit.contain)
+                      ? MjpegPlayer(
+                          url: "${ApiService().baseUrl}/camaras/$camId/live_feed/", 
+                          fit: BoxFit.contain
+                        )
                       : const Icon(Icons.videocam_off, color: Colors.white24, size: 40),
                   ),
                 ),
@@ -279,7 +277,7 @@ class _CamerasPageState extends State<CamerasPage> {
           ),
         ),
 
-        // LADO DERECHO: GRÁFICA Y CONTROLES (35% del espacio)
+        // LADO DERECHO: GRÁFICA Y CONTROLES
         Expanded(
           flex: 35,
           child: Container(
@@ -307,7 +305,7 @@ class _CamerasPageState extends State<CamerasPage> {
   }
 
   // =========================================================
-  // COMPONENTES REUTILIZABLES (Los tuyos, sin tocar la lógica)
+  // COMPONENTES REUTILIZABLES
   // =========================================================
 
   Widget _buildHeader(String name, bool active, int currentCount, {bool transparent = false}) {
@@ -484,7 +482,10 @@ class _CamerasPageState extends State<CamerasPage> {
                             child: isActive 
                               ? AspectRatio(
                                   aspectRatio: 16 / 9,
-                                  child: MjpegPlayer(key: ValueKey(camId),url: "${ApiService().baseUrl}/camaras/$camId/live_feed/", fit: BoxFit.contain),
+                                  child: MjpegPlayer(
+                                    url: "${ApiService().baseUrl}/camaras/$camId/live_feed/", 
+                                    fit: BoxFit.contain
+                                  ),
                                 )
                               : const Icon(Icons.videocam_off, color: Colors.white24, size: 60),
                           ),
